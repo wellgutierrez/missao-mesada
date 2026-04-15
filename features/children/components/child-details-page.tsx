@@ -407,13 +407,6 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
     await refreshPeriodSummaries();
   }
 
-  async function handleSelectHistoryPeriod(period: AllowancePeriod) {
-    setSelectedHistoryPeriod(period);
-    const logs = await getTaskLogsByPeriod(child.id, period.id);
-    setHistoryLogs(logs);
-    setActiveTab("resumo");
-  }
-
   useEffect(() => {
     refreshOpenPeriod();
     refreshClosedPeriods();
