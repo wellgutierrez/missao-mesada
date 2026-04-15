@@ -32,13 +32,12 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const router = useRouter();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showRewardModal, setShowRewardModal] = useState(false);
   const [taskModalType, setTaskModalType] = useState<"bonus" | "discount">("bonus");
   const [taskForm, setTaskForm] = useState({ title: "", amount: 0 });
   const [rewardForm, setRewardForm] = useState({ reward_title: "", bonus_goal: 5 });
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [isSavingReward, setIsSavingReward] = useState(false);
-
-  const currentLogs = selectedHistoryPeriod ? historyLogs : taskLogs;
 
   useEffect(() => {
     console.log("ChildDetailsPage state:", {
@@ -87,8 +86,6 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   async function refreshOpenPeriod() {
     setPeriodError(null);
     setLoadError(null);
-    setSelectedHistoryPeriod(null);
-    setHistoryLogs([]);
 
     const period = await getOpenPeriodByChild(child.id);
     setActivePeriod(period);
