@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { addTaskLog, decrementTaskLog, getTaskLogsByPeriod, type TaskLogRow } from "@/features/tasks/data/task-logs";
-import { calculateEndDate, closePeriod, createOpenPeriod, getClosedPeriodsByChild, getOpenPeriodByChild } from "@/features/children/data/periods";
+import { calculateEndDate, closePeriod, createOpenPeriod, getClosedPeriodsByChild, getOpenPeriodByChild, getPeriodSummariesByChild } from "@/features/children/data/periods";
 
-import type { Child, AllowancePeriod, PeriodType } from "../types";
+import type { Child, AllowancePeriod, PeriodType, PeriodSummary } from "../types";
 import type { Task } from "@/features/tasks/types";
 
 type ChildDetailsPageProps = {
@@ -20,7 +20,6 @@ type Tab = "tasks" | "registro" | "resumo";
 
 export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const [taskLogs, setTaskLogs] = useState<TaskLogRow[]>([]);
-  const [historyLogs, setHistoryLogs] = useState<TaskLogRow[]>([]);
   const [isSaving, setIsSaving] = useState<Record<string, boolean>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activePeriod, setActivePeriod] = useState<AllowancePeriod | null>(null);
@@ -28,11 +27,11 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const [showCreatePeriod, setShowCreatePeriod] = useState(false);
   const [isCreatingPeriod, setIsCreatingPeriod] = useState(false);
   const [closedPeriods, setClosedPeriods] = useState<AllowancePeriod[]>([]);
-  const [selectedHistoryPeriod, setSelectedHistoryPeriod] = useState<AllowancePeriod | null>(null);
+  const [periodSummaries, setPeriodSummaries] = useState<PeriodSummary[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("tasks");
   const router = useRouter();
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [showRewardModal, setShowRewardModal] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
   const [taskModalType, setTaskModalType] = useState<"bonus" | "discount">("bonus");
   const [taskForm, setTaskForm] = useState({ title: "", amount: 0 });
   const [rewardForm, setRewardForm] = useState({ reward_title: "", bonus_goal: 5 });
@@ -46,11 +45,9 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
       activeTab,
       period: activePeriod,
       tasksLength: tasks.length,
-      taskLogsLength: taskLogs.length,
-      historyLogsLength: historyLogs.length,
-      selectedHistoryPeriod
+      taskLogsLength: taskLogs.length
     });
-  }, [activeTab, activePeriod, tasks.length, taskLogs.length, historyLogs.length, selectedHistoryPeriod]);
+  }, [activeTab, activePeriod, tasks.length, taskLogs.length]);
   const periodBaseAmount = activePeriod?.base_allowance ?? child.base_allowance ?? 0;
 
   const activeTasks = tasks.filter((task) => task.is_active ?? true);
@@ -61,11 +58,11 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const otherTasks = tasks.filter((task) => task.type !== "bonus" && task.type !== "discount");
 
   const taskCounts: TaskCountMap = useMemo(() => {
-    return currentLogs.reduce((counts, log) => {
+    return taskLogs.reduce((counts, log) => {
       counts[log.task_id] = log.count;
       return counts;
     }, {} as TaskCountMap);
-  }, [currentLogs]);
+  }, [taskLogs]);
 
   const totalBonus = useMemo(
     () => bonusTasks.reduce((sum, task) => sum + (taskCounts[task.id] ?? 0) * task.amount, 0),
@@ -108,6 +105,11 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   async function refreshClosedPeriods() {
     const periods = await getClosedPeriodsByChild(child.id);
     setClosedPeriods(periods);
+  }
+
+  async function refreshPeriodSummaries() {
+    const summaries = await getPeriodSummariesByChild(child.id);
+    setPeriodSummaries(summaries);
   }
 
   async function handleCreatePeriod(formData: {
@@ -372,22 +374,40 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
 
   async function handleClosePeriod() {
     if (!activePeriod) {
+      alert("Não há período aberto para encerrar.");
       return;
     }
 
-    const confirmClose = window.confirm("Encerrar este período? Após o fechamento não será possível alterar tarefas.");
-    if (!confirmClose) {
+    setShowCloseModal(true);
+  }
+
+  async function handleConfirmClosePeriod() {
+    if (!activePeriod) {
       return;
     }
 
-    const success = await closePeriod(activePeriod.id);
+    const success = await closePeriod(
+      activePeriod.id,
+      child.id,
+      periodBaseAmount,
+      totalBonus,
+      totalDiscount,
+      finalAmount,
+      activePeriod.bonus_goal ?? 0,
+      completedBonusCount,
+      activePeriod.reward_title,
+      activePeriod.start_date,
+      activePeriod.end_date ?? activePeriod.start_date
+    );
     if (!success) {
       alert("Não foi possível encerrar o período.");
       return;
     }
 
+    setShowCloseModal(false);
     await refreshOpenPeriod();
     await refreshClosedPeriods();
+    await refreshPeriodSummaries();
   }
 
   async function handleSelectHistoryPeriod(period: AllowancePeriod) {
@@ -400,6 +420,7 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   useEffect(() => {
     refreshOpenPeriod();
     refreshClosedPeriods();
+    refreshPeriodSummaries();
   }, [child.id]);
 
   return (
@@ -778,20 +799,56 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
           ) : (
             <div className="space-y-4">
               <div className="rounded-3xl bg-slate-50 p-5">
-                <p className="text-sm text-slate-500">Meta de bônus</p>
-                <p className="text-xl font-semibold text-slate-900">{selectedHistoryPeriod?.bonus_goal ?? activePeriod?.bonus_goal ?? "-"}</p>
+                <p className="text-sm text-slate-500">Vigência do período</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {activePeriod ? `${activePeriod.start_date} → ${activePeriod.end_date}` : "-"}
+                </p>
               </div>
-              <div className="rounded-3xl bg-slate-50 p-5">
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Mesada base</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(periodBaseAmount)}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Meta de bônus</p>
+                  <p className="text-xl font-semibold text-slate-900">{activePeriod?.bonus_goal ?? "-"}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl bg-emerald-50 p-4">
+                  <p className="text-sm text-slate-500">Total bônus</p>
+                  <p className="text-xl font-semibold text-emerald-700">{formatCurrency(totalBonus)}</p>
+                </div>
+                <div className="rounded-2xl bg-rose-50 p-4">
+                  <p className="text-sm text-slate-500">Total descontos</p>
+                  <p className="text-xl font-semibold text-rose-700">{formatCurrency(totalDiscount)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Valor final</p>
+                <p className="text-3xl font-semibold text-slate-900">{formatCurrency(finalAmount)}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Bônus concluídos</p>
+                <p className="text-xl font-semibold text-slate-900">{completedBonusCount} / {activePeriod?.bonus_goal ?? 0}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Recompensa</p>
-                <p className="text-xl font-semibold text-slate-900">{selectedHistoryPeriod?.reward_title ?? activePeriod?.reward_title ?? "Sem recompensa definida"}</p>
+                <p className="text-xl font-semibold text-slate-900">{activePeriod?.reward_title ?? "Sem recompensa definida"}</p>
               </div>
-              <div className="rounded-3xl bg-slate-50 p-5">
+
+              <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Status da recompensa</p>
                 <p className="text-xl font-semibold text-slate-900">
-                  {(selectedHistoryPeriod || activePeriod)
-                    ? completedBonusCount >= ((selectedHistoryPeriod ?? activePeriod)?.bonus_goal ?? 0)
-                      ? "Recompensa conquistada"
-                      : "Ainda não conquistada"
+                  {activePeriod
+                    ? completedBonusCount >= (activePeriod.bonus_goal ?? 0)
+                      ? "Conquistada"
+                      : "Não conquistada"
                     : "-"}
                 </p>
               </div>
@@ -804,36 +861,114 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-brand-dark">Histórico</p>
-            <p className="text-sm text-slate-500">Períodos fechados da criança</p>
+            <p className="text-sm text-slate-500">Períodos encerrados da criança</p>
           </div>
         </div>
 
-        {closedPeriods.length === 0 ? (
+        {periodSummaries.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">Ainda não há períodos encerrados.</p>
         ) : (
           <ul className="mt-4 space-y-3">
-            {closedPeriods.map((period) => (
-              <li key={period.id}>
-                <button
-                  type="button"
-                  onClick={() => handleSelectHistoryPeriod(period)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-slate-100"
-                >
+            {periodSummaries.map((summary) => (
+              <li key={summary.id}>
+                <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{period.start_date} → {period.end_date}</p>
-                      <p className="text-xs text-slate-500">Recompensa: {period.reward_title}</p>
+                      <p className="text-sm font-semibold text-slate-900">{summary.started_at} → {summary.ended_at}</p>
+                      <p className="text-xs text-slate-500">Recompensa: {summary.reward_title}</p>
+                      <p className="text-xs text-slate-500">Valor final: {formatCurrency(summary.final_amount)}</p>
+                      <p className="text-xs text-slate-500">Bônus: {summary.bonus_completed} / {summary.bonus_goal}</p>
+                      <p className="text-xs text-slate-500">Status: {summary.reward_achieved ? "Conquistada" : "Não conquistada"}</p>
                     </div>
                     <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-dark">
-                      {period.status}
+                      Fechado
                     </span>
                   </div>
-                </button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {showCloseModal && activePeriod && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-slate-900">Encerrar período</h2>
+              <p className="text-sm text-slate-500">Confirme o fechamento do período atual</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Período</p>
+                <p className="text-base font-semibold text-slate-900">{activePeriod.start_date} → {activePeriod.end_date}</p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Mesada base</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(periodBaseAmount)}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Meta bônus</p>
+                  <p className="text-xl font-semibold text-slate-900">{activePeriod.bonus_goal}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl bg-emerald-50 p-4">
+                  <p className="text-sm text-slate-500">Total bônus</p>
+                  <p className="text-xl font-semibold text-emerald-700">{formatCurrency(totalBonus)}</p>
+                </div>
+                <div className="rounded-2xl bg-rose-50 p-4">
+                  <p className="text-sm text-slate-500">Total descontos</p>
+                  <p className="text-xl font-semibold text-rose-700">{formatCurrency(totalDiscount)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Valor final</p>
+                <p className="text-3xl font-semibold text-slate-900">{formatCurrency(finalAmount)}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Bônus concluídos</p>
+                <p className="text-xl font-semibold text-slate-900">{completedBonusCount} / {activePeriod.bonus_goal}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Recompensa</p>
+                <p className="text-xl font-semibold text-slate-900">{activePeriod.reward_title}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Status da recompensa</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {completedBonusCount >= (activePeriod.bonus_goal ?? 0) ? "Conquistada" : "Não conquistada"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCloseModal(false)}
+                className="flex-1 rounded-full border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClosePeriod}
+                className="flex-1 rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600"
+              >
+                Encerrar período
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreatePeriod && (
         <CreatePeriodModal

@@ -22,3 +22,20 @@ export type AllowancePeriod = {
   closed_at?: string | null;
   bonus_goal: number | null;
 };
+
+export type PeriodSummary = {
+  id: string;
+  period_id: string;
+  child_id: string;
+  base_allowance: number;
+  total_bonus: number;
+  total_discount: number;
+  final_amount: number;
+  bonus_goal: number;
+  bonus_completed: number;
+  reward_title: string;
+  reward_achieved: boolean;
+  started_at: string;
+  ended_at: string;
+  created_at?: string | null;
+};

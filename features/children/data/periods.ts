@@ -1,5 +1,5 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import type { AllowancePeriod, PeriodType } from "../types";
+import type { AllowancePeriod, PeriodType, PeriodSummary } from "../types";
 
 function getPeriodsSupabaseClient() {
   return createBrowserSupabaseClient();
@@ -133,8 +133,50 @@ export async function createOpenPeriod(
   return data as AllowancePeriod;
 }
 
-export async function closePeriod(periodId: string): Promise<boolean> {
+export async function closePeriod(
+  periodId: string,
+  childId: string,
+  baseAllowance: number,
+  totalBonus: number,
+  totalDiscount: number,
+  finalAmount: number,
+  bonusGoal: number,
+  bonusCompleted: number,
+  rewardTitle: string,
+  startedAt: string,
+  endedAt: string
+): Promise<boolean> {
   const supabase = getPeriodsSupabaseClient();
+
+  // Primeiro, verificar se já existe summary
+  const exists = await checkPeriodSummaryExists(periodId);
+  if (exists) {
+    console.warn("Period summary já existe para periodId:", periodId);
+    // Ainda assim, fechar o período
+  } else {
+    // Criar o summary
+    const rewardAchieved = bonusCompleted >= bonusGoal;
+    const summary = await createPeriodSummary(
+      periodId,
+      childId,
+      baseAllowance,
+      totalBonus,
+      totalDiscount,
+      finalAmount,
+      bonusGoal,
+      bonusCompleted,
+      rewardTitle,
+      rewardAchieved,
+      startedAt,
+      endedAt
+    );
+    if (!summary) {
+      console.error("Falha ao criar period summary");
+      return false;
+    }
+  }
+
+  // Fechar o período
   const { error } = await supabase
     .from("allowance_periods")
     .update({ status: "closed", closed_at: new Date().toISOString() })
@@ -161,4 +203,81 @@ export async function createFirstPeriod(
     "Sem recompensa definida",
     5
   );
+}
+
+export async function checkPeriodSummaryExists(periodId: string): Promise<boolean> {
+  const supabase = getPeriodsSupabaseClient();
+  const { data, error } = await supabase
+    .from("period_summaries")
+    .select("id")
+    .eq("period_id", periodId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Erro ao verificar se summary existe:", error.message ?? error);
+    return false;
+  }
+
+  return !!data;
+}
+
+export async function createPeriodSummary(
+  periodId: string,
+  childId: string,
+  baseAllowance: number,
+  totalBonus: number,
+  totalDiscount: number,
+  finalAmount: number,
+  bonusGoal: number,
+  bonusCompleted: number,
+  rewardTitle: string,
+  rewardAchieved: boolean,
+  startedAt: string,
+  endedAt: string
+): Promise<PeriodSummary | null> {
+  const supabase = getPeriodsSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("period_summaries")
+    .insert([
+      {
+        period_id: periodId,
+        child_id: childId,
+        base_allowance: baseAllowance,
+        total_bonus: totalBonus,
+        total_discount: totalDiscount,
+        final_amount: finalAmount,
+        bonus_goal: bonusGoal,
+        bonus_completed: bonusCompleted,
+        reward_title: rewardTitle,
+        reward_achieved: rewardAchieved,
+        started_at: startedAt,
+        ended_at: endedAt
+      }
+    ])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Erro ao criar period summary:", error.message ?? error);
+    return null;
+  }
+
+  return data as PeriodSummary;
+}
+
+export async function getPeriodSummariesByChild(childId: string): Promise<PeriodSummary[]> {
+  const supabase = getPeriodsSupabaseClient();
+  const { data, error } = await supabase
+    .from("period_summaries")
+    .select("*")
+    .eq("child_id", childId)
+    .order("started_at", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao buscar period summaries:", error.message ?? error);
+    return [];
+  }
+
+  return (data ?? []) as PeriodSummary[];
 }
