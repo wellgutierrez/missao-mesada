@@ -1,11 +1,10 @@
 ﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { addTaskLog, decrementTaskLog, getTaskLogsByPeriod, type TaskLogRow } from "@/features/tasks/data/task-logs";
-import { calculateEndDate, closePeriod, createOpenPeriod, getClosedPeriodsByChild, getOpenPeriodByChild, getPeriodSummariesByChild } from "@/features/children/data/periods";
+import { calculateEndDate, closePeriod, createOpenPeriod, getOpenPeriodByChild, getPeriodSummariesByChild } from "@/features/children/data/periods";
 
 import type { Child, AllowancePeriod, PeriodType, PeriodSummary } from "../types";
 import type { Task } from "@/features/tasks/types";
@@ -18,6 +17,65 @@ type ChildDetailsPageProps = {
 type TaskCountMap = Record<string, number>;
 type Tab = "tasks" | "registro" | "resumo";
 
+// Design System Components
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 p-6 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function Button({
+  children,
+  variant = "primary",
+  size = "default",
+  className = "",
+  ...props
+}: {
+  children: React.ReactNode;
+  variant?: "primary" | "danger" | "ghost";
+  size?: "default" | "sm";
+  className?: string;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const baseClasses = "inline-flex items-center justify-center rounded-full font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+  const sizeClasses = size === "sm" ? "px-3 py-2 text-sm" : "px-4 py-3 text-sm";
+  const variantClasses = {
+    primary: "bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500",
+    danger: "bg-rose-500 text-white hover:bg-rose-600 focus:ring-rose-500",
+    ghost: "bg-slate-100 text-slate-700 hover:bg-slate-200 focus:ring-slate-500"
+  };
+
+  return (
+    <button
+      className={`${baseClasses} ${sizeClasses} ${variantClasses[variant]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Badge({
+  children,
+  variant = "neutral"
+}: {
+  children: React.ReactNode;
+  variant?: "success" | "error" | "neutral";
+}) {
+  const variantClasses = {
+    success: "bg-emerald-100 text-emerald-800",
+    error: "bg-rose-100 text-rose-800",
+    neutral: "bg-slate-100 text-slate-700"
+  };
+
+  return (
+    <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${variantClasses[variant]}`}>
+      {children}
+    </span>
+  );
+}
+
 export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const [taskLogs, setTaskLogs] = useState<TaskLogRow[]>([]);
   const [isSaving, setIsSaving] = useState<Record<string, boolean>>({});
@@ -26,7 +84,6 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const [periodError, setPeriodError] = useState<string | null>(null);
   const [showCreatePeriod, setShowCreatePeriod] = useState(false);
   const [isCreatingPeriod, setIsCreatingPeriod] = useState(false);
-  const [closedPeriods, setClosedPeriods] = useState<AllowancePeriod[]>([]);
   const [periodSummaries, setPeriodSummaries] = useState<PeriodSummary[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("tasks");
   const router = useRouter();
@@ -39,14 +96,6 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [isSavingReward, setIsSavingReward] = useState(false);
 
-  useEffect(() => {
-    console.log("ChildDetailsPage state:", {
-      activeTab,
-      period: activePeriod,
-      tasksLength: tasks.length,
-      taskLogsLength: taskLogs.length
-    });
-  }, [activeTab, activePeriod, tasks.length, taskLogs.length]);
   const periodBaseAmount = activePeriod?.base_allowance ?? child.base_allowance ?? 0;
 
   const activeTasks = tasks.filter((task) => task.is_active ?? true);
@@ -54,7 +103,6 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
   const discountTasks = tasks.filter((task) => task.type === "discount");
   const activeBonusTasks = activeTasks.filter((task) => task.type === "bonus");
   const activeDiscountTasks = activeTasks.filter((task) => task.type === "discount");
-  const otherTasks = tasks.filter((task) => task.type !== "bonus" && task.type !== "discount");
 
   const taskCounts: TaskCountMap = useMemo(() => {
     return taskLogs.reduce((counts, log) => {
@@ -99,11 +147,6 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
     setTaskLogs(logs);
   }
 
-  async function refreshClosedPeriods() {
-    const periods = await getClosedPeriodsByChild(child.id);
-    setClosedPeriods(periods);
-  }
-
   async function refreshPeriodSummaries() {
     const summaries = await getPeriodSummariesByChild(child.id);
     setPeriodSummaries(summaries);
@@ -138,7 +181,6 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
 
       setShowCreatePeriod(false);
       await refreshOpenPeriod();
-      await refreshClosedPeriods();
     } finally {
       setIsCreatingPeriod(false);
     }
@@ -403,172 +445,176 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
 
     setShowCloseModal(false);
     await refreshOpenPeriod();
-    await refreshClosedPeriods();
     await refreshPeriodSummaries();
   }
 
   useEffect(() => {
     refreshOpenPeriod();
-    refreshClosedPeriods();
     refreshPeriodSummaries();
   }, [child.id]);
 
   return (
-    <section className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
-        <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-brand-dark">Detalhes da criança</p>
-              <h1 className="text-2xl font-semibold text-slate-900">{child.name}</h1>
-            </div>
-            <Link href="/" className="text-sm font-medium text-brand-dark underline">
-              Voltar para lista
-            </Link>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div>
-              <p className="text-sm text-slate-500">Idade</p>
-              <p className="text-base font-semibold text-slate-900">{child.age != null ? `${child.age} anos` : "Não informada"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Período</p>
-              <p className="text-base font-semibold text-slate-900">{activePeriod ? `${activePeriod.start_date} → ${activePeriod.end_date}` : "Nenhum período aberto"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Status</p>
-              <p className="text-base font-semibold text-slate-900 capitalize">{activePeriod ? activePeriod.status : "fechado"}</p>
+    <section className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+      <Card>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">Detalhes da criança</p>
+            <h1 className="text-5xl font-semibold tracking-tight text-slate-900">{child.name}</h1>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+              <span>{child.age != null ? `${child.age} anos` : "Idade não informada"}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <span>{activePeriod ? `${activePeriod.start_date} → ${activePeriod.end_date}` : "Nenhum período aberto"}</span>
+              <Badge variant={activePeriod ? "success" : "neutral"}>
+                {activePeriod ? activePeriod.status : "Fechado"}
+              </Badge>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowCreatePeriod(true)}
-              className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-            >
+          <div className="flex flex-wrap justify-start gap-3 sm:justify-end">
+            <Button onClick={() => setShowCreatePeriod(true)}>
               Novo período
-            </button>
+            </Button>
             {activePeriod ? (
-              <button
-                type="button"
-                onClick={handleClosePeriod}
-                className="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600"
-              >
+              <Button variant="danger" onClick={handleClosePeriod}>
                 Encerrar período
-              </button>
+              </Button>
             ) : null}
           </div>
-
-          {(loadError || periodError) && (
-            <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-700">
-              {loadError ?? periodError}
-            </div>
-          )}
         </div>
 
-        <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm text-slate-500">Resumo rápido</p>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">Mesada base</p>
-              <p className="text-xl font-semibold text-slate-900">{formatCurrency(periodBaseAmount)}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">Meta bônus</p>
-              <p className="text-xl font-semibold text-slate-900">{activePeriod?.bonus_goal ?? "-"}</p>
-            </div>
+        {(loadError || periodError) && (
+          <div className="mt-6 rounded-[1.75rem] bg-amber-50 p-4 text-sm text-amber-700 shadow-sm ring-1 ring-amber-100">
+            {loadError ?? periodError}
           </div>
+        )}
+      </Card>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl bg-emerald-50 p-4">
-              <p className="text-sm text-slate-500">Total bônus</p>
-              <p className="text-xl font-semibold text-emerald-700">{formatCurrency(totalBonus)}</p>
-            </div>
-            <div className="rounded-2xl bg-rose-50 p-4">
-              <p className="text-sm text-slate-500">Total descontos</p>
-              <p className="text-xl font-semibold text-rose-700">{formatCurrency(totalDiscount)}</p>
-            </div>
+      <Card>
+        <div className="grid gap-6 md:grid-cols-4">
+          <div className="text-center">
+            <p className="text-sm text-slate-500 uppercase tracking-[0.16em]">Mesada base</p>
+            <p className="mt-4 text-4xl font-semibold text-slate-900">{formatCurrency(periodBaseAmount)}</p>
           </div>
-
-          <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Valor final</p>
-            <p className="text-3xl font-semibold text-slate-900">{formatCurrency(finalAmount)}</p>
+          <div className="text-center">
+            <p className="text-sm text-slate-500 uppercase tracking-[0.16em]">Meta bônus</p>
+            <p className="mt-4 text-4xl font-semibold text-slate-900">{activePeriod?.bonus_goal ?? "-"}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm uppercase tracking-[0.16em] text-emerald-700">Total bônus</p>
+            <p className="mt-4 text-4xl font-semibold text-emerald-900">{formatCurrency(totalBonus)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm uppercase tracking-[0.16em] text-rose-700">Total descontos</p>
+            <p className="mt-4 text-4xl font-semibold text-rose-900">{formatCurrency(totalDiscount)}</p>
           </div>
         </div>
-      </div>
 
-      <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <div className="flex flex-wrap gap-2">
-          {(["tasks", "registro", "resumo"] as Tab[]).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={`rounded-full px-4 py-2 text-sm font-medium ${activeTab === tab ? "bg-brand text-white" : "bg-slate-100 text-slate-700"}`}
-            >
-              {tab === "tasks" ? "Tarefas" : tab === "registro" ? "Registro" : "Resumo"}
-            </button>
-          ))}
+        <div className="mt-8 rounded-[2rem] bg-slate-900 p-8 text-center text-white shadow-lg">
+          <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Valor final</p>
+          <p className="mt-4 text-6xl font-semibold">{formatCurrency(finalAmount)}</p>
+        </div>
+      </Card>
+
+      <Card className="bg-yellow-50 ring-yellow-200">
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">🎁 Recompensa</p>
+            <h2 className="mt-3 text-4xl font-semibold text-slate-900">{activePeriod?.reward_title ?? "Nenhuma recompensa definida"}</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Acompanhe o objetivo do período atual e incentive sua criança com metas claras para manter o progresso.</p>
+          </div>
+          <Badge variant={activePeriod && completedBonusCount >= (activePeriod.bonus_goal ?? 0) ? "success" : "error"}>
+            {activePeriod
+              ? completedBonusCount >= (activePeriod.bonus_goal ?? 0)
+                ? "Conquistada"
+                : "Em progresso"
+              : "Não disponível"}
+          </Badge>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-full bg-slate-100 p-2 shadow-inner shadow-slate-100">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-500">Painel</p>
+            <h2 className="text-xl font-semibold text-slate-900">Ações do período</h2>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {(["tasks", "registro", "resumo"] as Tab[]).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+                  activeTab === tab
+                    ? "bg-slate-900 text-white shadow"
+                    : "text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {tab === "tasks" ? "Tarefas" : tab === "registro" ? "Registro" : "Resumo"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-8">
           {activeTab === "tasks" ? (
             <div className="space-y-6">
-              <div className="flex flex-col gap-4 rounded-3xl bg-slate-50 p-5 shadow-sm ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-slate-500">Configuração de tarefas</p>
-                  <h3 className="text-xl font-semibold text-slate-900">Adicione e gerencie tarefas aqui</h3>
-                  <p className="text-sm text-slate-500">Use os botões abaixo para criar bônus, descontos e definir recompensa.</p>
-                </div>
-                <div className="grid gap-2 sm:auto-cols-max sm:grid-flow-col">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenTaskModal("discount")}
-                    className="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600"
-                  >
-                    Adicionar desconto
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenTaskModal("bonus")}
-                    className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
-                  >
-                    Adicionar bônus
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleOpenRewardModal}
-                    className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-                  >
-                    {activePeriod?.reward_title ? "Editar recompensa" : "Adicionar recompensa"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Card className="bg-slate-50">
+                <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
                   <div>
-                    <p className="text-sm text-slate-500">Recompensa atual</p>
-                    <p className="text-lg font-semibold text-slate-900">{activePeriod?.reward_title ?? "—"}</p>
+                    <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-500">Painel de tarefas</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-slate-900">Configurar e gerenciar</h3>
+                    <p className="mt-2 text-sm text-slate-500">Crie descontos e bônus com facilidade, e ajuste a recompensa do período.</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-slate-500">Meta de bônus</p>
-                    <p className="text-lg font-semibold text-slate-900">{activePeriod?.bonus_goal ?? "—"} tarefas</p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Button variant="primary" onClick={() => handleOpenTaskModal("bonus")}>
+                      Adicionar bônus
+                    </Button>
+                    <Button variant="danger" onClick={() => handleOpenTaskModal("discount")}>
+                      Adicionar desconto
+                    </Button>
+                    <Button variant="ghost" onClick={handleOpenRewardModal}>
+                      {activePeriod?.reward_title ? "Editar recompensa" : "Adicionar recompensa"}
+                    </Button>
                   </div>
                 </div>
+              </Card>
+
+              <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+                <Card>
+                  <p className="text-sm text-slate-500">Recompensa atual</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">{activePeriod?.reward_title ?? "Nenhuma recompensa definida"}</p>
+                </Card>
+                <Card className="bg-slate-50">
+                  <p className="text-sm text-slate-500">Meta de bônus</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">{activePeriod?.bonus_goal ?? "-"}</p>
+                  <p className="mt-2 text-sm text-slate-500">tarefas necessárias</p>
+                </Card>
               </div>
 
-              <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm text-slate-500">Progresso da recompensa</p>
-                <p className="text-lg font-semibold text-slate-900">
-                  {completedBonusCount} / {activePeriod?.bonus_goal ?? 0} tarefas bônus concluídas
-                </p>
-              </div>
+              <Card>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">Progresso da recompensa</p>
+                    <p className="mt-3 text-2xl font-semibold text-slate-900">
+                      {completedBonusCount} / {activePeriod?.bonus_goal ?? 0}
+                    </p>
+                  </div>
+                  <Badge variant={activePeriod && completedBonusCount >= (activePeriod.bonus_goal ?? 0) ? "success" : "neutral"}>
+                    {activePeriod && completedBonusCount >= (activePeriod.bonus_goal ?? 0) ? "Meta atingida" : "Em andamento"}
+                  </Badge>
+                </div>
+                <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-emerald-500"
+                    style={{ width: `${activePeriod?.bonus_goal ? Math.min(100, (completedBonusCount / activePeriod.bonus_goal) * 100) : 0}%` }}
+                  />
+                </div>
+              </Card>
 
-              <div className="grid gap-4 xl:grid-cols-2">
-                <section className="rounded-3xl bg-slate-50 p-5">
+              <div className="grid gap-6 xl:grid-cols-2">
+                <section className="rounded-[1.75rem] bg-slate-50 p-6">
                   <h3 className="text-base font-semibold text-slate-900">Descontos</h3>
                   <div className="mt-4 space-y-3">
                     {discountTasks.length > 0 ? (
@@ -576,7 +622,7 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                         const isActive = task.is_active ?? true;
                         const saving = !!isSaving[task.id];
                         return (
-                          <div key={task.id} className="rounded-2xl bg-white p-4 shadow-sm">
+                          <div key={task.id} className="rounded-[1.75rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <p className="font-medium text-slate-900">{task.title}</p>
@@ -586,22 +632,24 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                                 </p>
                               </div>
                               <div className="flex items-center gap-2">
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleToggleTaskActive(task)}
                                   disabled={saving}
-                                  className="rounded-full bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-60"
                                 >
                                   {isActive ? "Desativar" : "Ativar"}
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   type="button"
+                                  variant="danger"
+                                  size="sm"
                                   onClick={() => handleDeleteTask(task.id)}
                                   disabled={saving}
-                                  className="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-60"
                                 >
                                   Excluir
-                                </button>
+                                </Button>
                               </div>
                             </div>
                           </div>
@@ -613,7 +661,7 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                   </div>
                 </section>
 
-                <section className="rounded-3xl bg-slate-50 p-5">
+                <section className="rounded-[1.75rem] bg-slate-50 p-6">
                   <h3 className="text-base font-semibold text-slate-900">Bônus</h3>
                   <div className="mt-4 space-y-3">
                     {bonusTasks.length > 0 ? (
@@ -621,7 +669,7 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                         const isActive = task.is_active ?? true;
                         const saving = !!isSaving[task.id];
                         return (
-                          <div key={task.id} className="rounded-2xl bg-white p-4 shadow-sm">
+                          <div key={task.id} className="rounded-[1.75rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <p className="font-medium text-slate-900">{task.title}</p>
@@ -631,22 +679,24 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                                 </p>
                               </div>
                               <div className="flex items-center gap-2">
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleToggleTaskActive(task)}
                                   disabled={saving}
-                                  className="rounded-full bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-60"
                                 >
                                   {isActive ? "Desativar" : "Ativar"}
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   type="button"
+                                  variant="danger"
+                                  size="sm"
                                   onClick={() => handleDeleteTask(task.id)}
                                   disabled={saving}
-                                  className="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-60"
                                 >
                                   Excluir
-                                </button>
+                                </Button>
                               </div>
                             </div>
                           </div>
@@ -660,25 +710,30 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
               </div>
             </div>
           ) : activeTab === "registro" ? (
-            <div className="space-y-4">
-              <div className="rounded-3xl bg-slate-50 p-5">
+            <div className="space-y-5">
+              <Card className="bg-slate-50">
                 <p className="text-sm text-slate-500">Período atual</p>
-                <p className="text-base font-semibold text-slate-900">{activePeriod ? `${activePeriod.start_date} → ${activePeriod.end_date}` : "Nenhum período aberto"}</p>
-              </div>
+                <p className="mt-2 text-xl font-semibold text-slate-900">{activePeriod ? `${activePeriod.start_date} → ${activePeriod.end_date}` : "Nenhum período aberto"}</p>
+              </Card>
 
-              <div className="grid gap-4 xl:grid-cols-2">
-                <section className="rounded-3xl bg-slate-50 p-5">
-                  <h3 className="text-base font-semibold text-slate-900">Descontos</h3>
-                  <div className="mt-4 space-y-3">
+              <div className="grid gap-6 xl:grid-cols-2">
+                <section className="rounded-[1.75rem] bg-white p-6 shadow-sm ring-1 ring-slate-200">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Descontos</h3>
+                      <p className="text-sm text-slate-500">Registre aplicações de desconto</p>
+                    </div>
+                  </div>
+                  <div className="mt-5 space-y-3">
                     {activeDiscountTasks.length > 0 ? (
                       activeDiscountTasks.map((task) => {
                         const count = taskCounts[task.id] ?? 0;
                         const saving = !!isSaving[task.id];
                         return (
-                          <div key={task.id} className="rounded-2xl bg-white p-4 shadow-sm">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <p className="font-medium text-slate-900">{task.title}</p>
+                          <div key={task.id} className="rounded-[1.75rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-200">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="space-y-2">
+                                <p className="font-semibold text-slate-900">{task.title}</p>
                                 <p className="text-sm text-rose-700">{formatCurrency(task.amount)}</p>
                                 {count > 0 ? (
                                   <p className="text-xs text-slate-500">
@@ -686,24 +741,28 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                                   </p>
                                 ) : null}
                               </div>
-                              <div className="flex gap-2">
-                                <button
+                              <div className="flex items-center gap-2">
+                                <Button
                                   type="button"
+                                  variant="danger"
+                                  size="sm"
                                   onClick={() => handleAddTask(task)}
                                   disabled={!activePeriod || saving}
-                                  className="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                                  className="min-w-10"
                                 >
                                   +
-                                </button>
+                                </Button>
                                 {count > 0 ? (
-                                  <button
+                                  <Button
                                     type="button"
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => handleRemoveTask(task)}
                                     disabled={!activePeriod || saving}
-                                    className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                                    className="min-w-10"
                                   >
                                     -
-                                  </button>
+                                  </Button>
                                 ) : null}
                               </div>
                             </div>
@@ -716,43 +775,52 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                   </div>
                 </section>
 
-                <section className="rounded-3xl bg-slate-50 p-5">
-                  <h3 className="text-base font-semibold text-slate-900">Bônus</h3>
-                  <div className="mt-4 space-y-3">
+                <section className="rounded-[1.75rem] bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Bônus</h3>
+                      <p className="text-sm text-slate-500">Registre tarefas bônus concluídas</p>
+                    </div>
+                  </div>
+                  <div className="mt-5 space-y-3">
                     {activeBonusTasks.length > 0 ? (
                       activeBonusTasks.map((task) => {
                         const count = taskCounts[task.id] ?? 0;
                         const saving = !!isSaving[task.id];
                         return (
-                          <div key={task.id} className="rounded-2xl bg-white p-4 shadow-sm">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <p className="font-medium text-slate-900">{task.title}</p>
-                                <p className="text-sm text-slate-500">{formatCurrency(task.amount)}</p>
+                          <div key={task.id} className="rounded-[1.75rem] bg-slate-50 p-5 shadow-sm ring-1 ring-slate-200">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="space-y-2">
+                                <p className="font-semibold text-slate-900">{task.title}</p>
+                                <p className="text-sm text-slate-600">{formatCurrency(task.amount)}</p>
                                 {count > 0 ? (
                                   <p className="text-xs text-slate-500">
                                     {count} × {formatCurrency(task.amount)} = {formatCurrency(task.amount * count)}
                                   </p>
                                 ) : null}
                               </div>
-                              <div className="flex gap-2">
-                                <button
+                              <div className="flex items-center gap-2">
+                                <Button
                                   type="button"
+                                  variant="primary"
+                                  size="sm"
                                   onClick={() => handleAddTask(task)}
                                   disabled={!activePeriod || saving}
-                                  className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                                  className="min-w-10"
                                 >
                                   +
-                                </button>
+                                </Button>
                                 {count > 0 ? (
-                                  <button
+                                  <Button
                                     type="button"
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => handleRemoveTask(task)}
                                     disabled={!activePeriod || saving}
-                                    className="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                                    className="min-w-10"
                                   >
                                     -
-                                  </button>
+                                  </Button>
                                 ) : null}
                               </div>
                             </div>
@@ -767,90 +835,84 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-3xl bg-white p-5 shadow-sm">
+                <Card>
                   <p className="text-sm text-slate-500">Mesada base</p>
-                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(periodBaseAmount)}</p>
-                </div>
-                <div className="rounded-3xl bg-white p-5 shadow-sm">
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">{formatCurrency(periodBaseAmount)}</p>
+                </Card>
+                <Card>
                   <p className="text-sm text-slate-500">Total bônus</p>
-                  <p className="text-xl font-semibold text-emerald-700">{formatCurrency(totalBonus)}</p>
-                </div>
-                <div className="rounded-3xl bg-white p-5 shadow-sm">
+                  <p className="mt-3 text-2xl font-semibold text-emerald-700">{formatCurrency(totalBonus)}</p>
+                </Card>
+                <Card>
                   <p className="text-sm text-slate-500">Total descontos</p>
-                  <p className="text-xl font-semibold text-rose-700">{formatCurrency(totalDiscount)}</p>
-                </div>
+                  <p className="mt-3 text-2xl font-semibold text-rose-700">{formatCurrency(totalDiscount)}</p>
+                </Card>
               </div>
 
-              <div className="rounded-3xl bg-slate-50 p-5">
-                <p className="text-sm text-slate-500">Valor final</p>
-                <p className="text-3xl font-semibold text-slate-900">{formatCurrency(finalAmount)}</p>
-              </div>
+              <Card className="bg-slate-900 text-white shadow-lg ring-slate-900">
+                <p className="text-sm text-slate-300">Valor final</p>
+                <p className="mt-3 text-4xl font-semibold">{formatCurrency(finalAmount)}</p>
+              </Card>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="rounded-3xl bg-slate-50 p-5">
-                <p className="text-sm text-slate-500">Vigência do período</p>
-                <p className="text-xl font-semibold text-slate-900">
-                  {activePeriod ? `${activePeriod.start_date} → ${activePeriod.end_date}` : "-"}
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">Mesada base</p>
-                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(periodBaseAmount)}</p>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
+            <div className="space-y-5">
+              <div className="grid gap-4 xl:grid-cols-[1.4fr_0.85fr]">
+                <Card className="bg-slate-50">
+                  <p className="text-sm text-slate-500">Vigência do período</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">
+                    {activePeriod ? `${activePeriod.start_date} → ${activePeriod.end_date}` : "-"}
+                  </p>
+                </Card>
+                <Card>
                   <p className="text-sm text-slate-500">Meta de bônus</p>
-                  <p className="text-xl font-semibold text-slate-900">{activePeriod?.bonus_goal ?? "-"}</p>
-                </div>
+                  <p className="mt-3 text-3xl font-semibold text-slate-900">{activePeriod?.bonus_goal ?? "-"}</p>
+                </Card>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-emerald-50 p-4">
-                  <p className="text-sm text-slate-500">Total bônus</p>
-                  <p className="text-xl font-semibold text-emerald-700">{formatCurrency(totalBonus)}</p>
-                </div>
-                <div className="rounded-2xl bg-rose-50 p-4">
-                  <p className="text-sm text-slate-500">Total descontos</p>
-                  <p className="text-xl font-semibold text-rose-700">{formatCurrency(totalDiscount)}</p>
-                </div>
+                <Card className="bg-emerald-50 ring-emerald-100">
+                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-700">Total bônus</p>
+                  <p className="mt-3 text-3xl font-semibold text-emerald-900">{formatCurrency(totalBonus)}</p>
+                </Card>
+                <Card className="bg-rose-50 ring-rose-100">
+                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-rose-700">Total descontos</p>
+                  <p className="mt-3 text-3xl font-semibold text-rose-900">{formatCurrency(totalDiscount)}</p>
+                </Card>
               </div>
 
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Valor final</p>
-                <p className="text-3xl font-semibold text-slate-900">{formatCurrency(finalAmount)}</p>
-              </div>
+              <Card className="bg-slate-900 text-white shadow-lg ring-slate-900">
+                <p className="text-sm uppercase tracking-[0.18em] text-slate-300">Valor final</p>
+                <p className="mt-4 text-5xl font-semibold">{formatCurrency(finalAmount)}</p>
+              </Card>
 
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Bônus concluídos</p>
-                <p className="text-xl font-semibold text-slate-900">{completedBonusCount} / {activePeriod?.bonus_goal ?? 0}</p>
-              </div>
-
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Recompensa</p>
-                <p className="text-xl font-semibold text-slate-900">{activePeriod?.reward_title ?? "Sem recompensa definida"}</p>
-              </div>
-
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Status da recompensa</p>
-                <p className="text-xl font-semibold text-slate-900">
-                  {activePeriod
-                    ? completedBonusCount >= (activePeriod.bonus_goal ?? 0)
-                      ? "Conquistada"
-                      : "Não conquistada"
-                    : "-"}
-                </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Card>
+                  <p className="text-sm text-slate-500">Bônus concluídos</p>
+                  <p className="mt-3 text-3xl font-semibold text-slate-900">{completedBonusCount} / {activePeriod?.bonus_goal ?? 0}</p>
+                </Card>
+                <Card className="bg-slate-50">
+                  <p className="text-sm text-slate-500">Recompensa</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">{activePeriod?.reward_title ?? "Sem recompensa definida"}</p>
+                  <div className="mt-4">
+                    <Badge variant={activePeriod && completedBonusCount >= (activePeriod.bonus_goal ?? 0) ? "success" : "error"}>
+                      {activePeriod
+                        ? completedBonusCount >= (activePeriod.bonus_goal ?? 0)
+                          ? "Conquistada"
+                          : "Não conquistada"
+                        : "Não disponível"}
+                    </Badge>
+                  </div>
+                </Card>
               </div>
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
-      <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <div className="flex items-center justify-between">
+      <Card>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-brand-dark">Histórico</p>
+            <p className="text-sm font-medium uppercase tracking-[0.24em] text-slate-500">Histórico</p>
             <p className="text-sm text-slate-500">Períodos encerrados da criança</p>
           </div>
         </div>
@@ -861,8 +923,8 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
           <ul className="mt-4 space-y-3">
             {periodSummaries.map((summary) => (
               <li key={summary.id}>
-                <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
+                <div className="w-full rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{summary.started_at} → {summary.ended_at}</p>
                       <p className="text-xs text-slate-500">Recompensa: {summary.reward_title}</p>
@@ -870,16 +932,15 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                       <p className="text-xs text-slate-500">Bônus: {summary.bonus_completed} / {summary.bonus_goal}</p>
                       <p className="text-xs text-slate-500">Status: {summary.reward_achieved ? "Conquistada" : "Não conquistada"}</p>
                     </div>
-                    <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-dark">
-                      Fechado
-                    </span>
+                    <Badge variant="neutral">Fechado</Badge>
                   </div>
                 </div>
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </Card>
+    </div>
 
       {showCloseModal && activePeriod && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
@@ -941,20 +1002,22 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
             </div>
 
             <div className="mt-6 flex gap-3">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setShowCloseModal(false)}
-                className="flex-1 rounded-full border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="flex-1"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="danger"
                 onClick={handleConfirmClosePeriod}
-                className="flex-1 rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600"
+                className="flex-1"
               >
                 Encerrar período
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1002,20 +1065,21 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                 />
               </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setShowTaskModal(false)}
-                  className="flex-1 rounded-full border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="flex-1"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   disabled={isSavingTask}
-                  className="flex-1 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+                  className="flex-1 bg-brand hover:bg-brand-dark"
                 >
                   {isSavingTask ? "Salvando..." : "Salvar tarefa"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -1052,20 +1116,21 @@ export function ChildDetailsPage({ child, tasks }: ChildDetailsPageProps) {
                 />
               </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setShowRewardModal(false)}
-                  className="flex-1 rounded-full border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="flex-1"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   disabled={isSavingReward}
-                  className="flex-1 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+                  className="flex-1 bg-brand hover:bg-brand-dark"
                 >
                   {isSavingReward ? "Salvando..." : "Salvar recompensa"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -1214,21 +1279,22 @@ function CreatePeriodModal({ child, onClose, onCreate, isCreating }: CreatePerio
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={onClose}
               disabled={isCreating}
-              className="flex-1 rounded-full border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              className="flex-1"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isCreating}
-              className="flex-1 rounded-full bg-brand-dark py-2 text-sm font-medium text-white hover:bg-brand-dark/90 disabled:opacity-60"
+              className="flex-1 bg-brand-dark hover:bg-brand-dark/90"
             >
               {isCreating ? "Criando..." : "Criar período"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
