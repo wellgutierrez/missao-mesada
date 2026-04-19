@@ -1,29 +1,51 @@
+import { DashboardShell } from "@/features/children/components/dashboard-shell";
 import { NewChildForm } from "@/features/children/components/new-child-form";
+import { getChildren } from "@/features/children/data/get-children";
 
-export default function NewChildPage() {
+export default async function NewChildPage() {
+  const { children } = await getChildren();
+
   return (
-    <section className="space-y-6">
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-brand-dark">Crianças</p>
-        <h2 className="text-2xl font-semibold text-slate-900">Novo filho</h2>
-        <p className="text-sm text-slate-600">
-          Preencha os dados para adicionar uma nova criança ao sistema.
-        </p>
-      </div>
+    <DashboardShell childList={children}>
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+        <div className="rounded-[28px] border border-app-line bg-white p-6 shadow-[0_24px_70px_-42px_rgba(53,99,233,0.35)]">
+          <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="rounded-[24px] border border-app-line bg-slate-50 p-4">
+              <NewChildForm compact />
+            </div>
 
-      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <NewChildForm />
-      </div>
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-app-primary">Nova crianca</p>
+                <h1 className="mt-2 text-4xl font-extrabold tracking-[-0.04em] text-slate-900">
+                  Monte o perfil inicial do acompanhamento
+                </h1>
+                <p className="mt-3 max-w-2xl text-base leading-8 text-slate-600">
+                  Use a mesma estrutura da interface principal: crie a crianca, abra o primeiro periodo automaticamente e siga para o registro de tarefas e resumo.
+                </p>
+              </div>
 
-      <div className="space-y-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-        <h3 className="font-semibold text-slate-900">O que acontecerá:</h3>
-        <ul className="list-inside space-y-2 list-disc">
-          <li>A criança será criada com os dados informados</li>
-          <li>Automaticamente um período semanal será aberto</li>
-          <li>Você poderá adicionar tarefas e registrar atividades</li>
-          <li>Após configurar tudo, o primeiro período estará pronto para uso</li>
-        </ul>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-[24px] border border-app-line bg-app-soft p-5">
+                  <p className="text-sm font-semibold uppercase tracking-[0.14em] text-app-primary">Fluxo</p>
+                  <p className="mt-3 text-lg font-bold text-slate-900">Criacao imediata do primeiro periodo</p>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    A crianca entra pronta para uso, com periodo semanal inicial aberto automaticamente.
+                  </p>
+                </div>
+                <div className="rounded-[24px] border border-app-line bg-white p-5">
+                  <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Depois disso</p>
+                  <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-600">
+                    <li>Registrar bonus e descontos</li>
+                    <li>Definir recompensa do periodo</li>
+                    <li>Acompanhar resumo e historico</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </section>
+    </DashboardShell>
   );
 }

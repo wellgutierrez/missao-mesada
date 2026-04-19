@@ -4,10 +4,21 @@
 
 :root {
   color-scheme: light;
+  --app-bg: #f7f9ff;
+  --app-surface: #ffffff;
+  --app-line: #dce5f2;
+  --app-primary: #3563e9;
+  --app-primary-dark: #2850cd;
+  --app-soft: #eaf1ff;
+  --app-text: #1f2f48;
+}
+
+html {
+  background: var(--app-bg);
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-app-bg text-slate-900 antialiased;
 }
 
 a {
@@ -16,4 +27,14 @@ a {
 
 button {
   @apply transition-colors;
+}
+
+input,
+select,
+textarea {
+  @apply text-slate-900 placeholder:text-slate-400;
+}
+
+::selection {
+  @apply bg-app-primary text-white;
 }

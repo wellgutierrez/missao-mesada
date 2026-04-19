@@ -61,6 +61,20 @@ export async function createChild(
     };
   }
 
+  if (age == null || Number.isNaN(age)) {
+    return {
+      child: null,
+      errorMessage: "Idade e obrigatoria."
+    };
+  }
+
+  if (age < 4 || age > 18) {
+    return {
+      child: null,
+      errorMessage: "A idade precisa estar entre 4 e 18 anos."
+    };
+  }
+
   try {
     const supabase = createServerSupabaseClient();
 

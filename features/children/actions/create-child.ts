@@ -7,7 +7,15 @@ export async function createChildAction(
   age: number | null,
   baseAllowance: number
 ): Promise<{ error?: string }> {
-  const { child, errorMessage } = await createChild(name, age, baseAllowance);
+  if (age == null || Number.isNaN(age)) {
+    return { error: "Idade e obrigatoria." };
+  }
+
+  if (age < 4 || age > 18) {
+    return { error: "A idade precisa estar entre 4 e 18 anos." };
+  }
+
+  const { errorMessage } = await createChild(name, age, baseAllowance);
 
   if (errorMessage) {
     return { error: errorMessage };

@@ -10,9 +10,19 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#0F766E",
-          dark: "#115E59",
-          soft: "#CCFBF1"
+          DEFAULT: "#3563E9",
+          dark: "#2850CD",
+          soft: "#EAF1FF"
+        },
+        app: {
+          bg: "#F7F9FF",
+          line: "#DCE5F2",
+          primary: "#3563E9",
+          "primary-dark": "#2850CD",
+          soft: "#EAF1FF",
+          success: "#22C55E",
+          warning: "#F59E0B",
+          danger: "#EF4444"
         }
       }
     }
