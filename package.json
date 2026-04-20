@@ -6,9 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "supabase:login": "npx supabase login",
+    "supabase:link": "npx supabase link --project-ref",
+    "supabase:db:push": "npx supabase db push",
+    "supabase:types": "npx supabase gen types typescript --linked > types/database.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.49.8",
     "next": "^15.5.15",
     "react": "^19.2.5",

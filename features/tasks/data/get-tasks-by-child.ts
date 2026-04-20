@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import { requireAuth } from "@/features/auth/data/get-auth-user";
 import type { Task } from "../types";
 
 export async function getTasksByChildId(childId: string): Promise<Task[]> {
@@ -8,11 +9,13 @@ export async function getTasksByChildId(childId: string): Promise<Task[]> {
     return [];
   }
 
-  const supabase = createServerSupabaseClient();
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, title, type, amount, is_active")
+    .select("id, title, type, amount, owner_user_id, is_active")
     .eq("child_id", childId)
+    .eq("owner_user_id", user.id)
     .order("created_at", { ascending: true });
 
   if (error) {

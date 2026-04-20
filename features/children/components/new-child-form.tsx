@@ -138,7 +138,7 @@ export function NewChildForm({ compact = false }: NewChildFormProps) {
           />
         </div>
         <p className="mt-2 text-xs italic text-slate-400">
-          Este valor sera a base da mesada do primeiro periodo.
+          Este valor sera usado como referencia ao abrir o primeiro periodo.
         </p>
       </div>
 

@@ -3,6 +3,7 @@ export type Task = {
   title: string;
   type: "bonus" | "discount";
   amount: number;
+  owner_user_id?: string | null;
   is_active?: boolean;
 };
 

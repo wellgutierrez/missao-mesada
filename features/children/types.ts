@@ -3,6 +3,7 @@ export type Child = {
   name: string;
   age: number | null;
   base_allowance: number | null;
+  owner_user_id?: string | null;
   created_at?: string | null;
 };
 
@@ -12,6 +13,7 @@ export type PeriodStatus = "open" | "closed";
 export type AllowancePeriod = {
   id: string;
   child_id: string;
+  owner_user_id?: string | null;
   period_type: PeriodType;
   start_date: string;
   end_date: string | null;
@@ -27,6 +29,7 @@ export type PeriodSummary = {
   id: string;
   period_id: string;
   child_id: string;
+  owner_user_id?: string | null;
   base_allowance: number;
   total_bonus: number;
   total_discount: number;

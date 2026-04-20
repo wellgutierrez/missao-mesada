@@ -1,17 +1,21 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { DashboardShell } from "@/features/children/components/dashboard-shell";
+import { ChildCard } from "@/features/children/components/child-card";
 import type { Child } from "../types";
 
 type ChildrenPageProps = {
   children: Child[];
   errorMessage?: string;
+  successMessage?: string;
+  headerActions?: ReactNode;
 };
 
-export function ChildrenPage({ children, errorMessage }: ChildrenPageProps) {
+export function ChildrenPage({ children, errorMessage, successMessage, headerActions }: ChildrenPageProps) {
   const totalBase = children.reduce((sum, child) => sum + (child.base_allowance ?? 0), 0);
 
   return (
-    <DashboardShell childList={children}>
+    <DashboardShell childList={children} headerActions={headerActions}>
       <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)]">
           <section className="rounded-[28px] border border-app-line bg-white p-6 shadow-[0_24px_70px_-42px_rgba(53,99,233,0.35)]">
@@ -26,6 +30,12 @@ export function ChildrenPage({ children, errorMessage }: ChildrenPageProps) {
             {errorMessage ? (
               <div className="mt-5 rounded-2xl border-l-4 border-amber-400 bg-amber-50 px-4 py-4 text-sm text-amber-900">
                 {errorMessage}
+              </div>
+            ) : null}
+
+            {successMessage ? (
+              <div className="mt-5 rounded-2xl border-l-4 border-emerald-400 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+                {successMessage}
               </div>
             ) : null}
 
@@ -62,29 +72,7 @@ export function ChildrenPage({ children, errorMessage }: ChildrenPageProps) {
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {children.length > 0 ? (
-              children.map((child) => (
-                <Link
-                  key={child.id}
-                  href={`/children/${child.id}`}
-                  className="rounded-[22px] border border-app-line bg-slate-50 p-5 transition hover:-translate-y-0.5 hover:border-app-primary/50 hover:bg-app-soft"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xl font-extrabold tracking-[-0.03em] text-slate-900">{child.name}</p>
-                      <p className="mt-2 text-sm text-slate-500">
-                        {child.age ? `${child.age} anos` : "Idade nao informada"}
-                      </p>
-                    </div>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-app-primary text-lg font-bold text-white">
-                      {child.name.slice(0, 1).toUpperCase()}
-                    </div>
-                  </div>
-                  <div className="mt-6 flex items-center justify-between rounded-2xl bg-white px-4 py-3">
-                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Mesada base</span>
-                    <span className="text-lg font-extrabold text-app-primary">{formatCurrency(child.base_allowance)}</span>
-                  </div>
-                </Link>
-              ))
+              children.map((child) => <ChildCard key={child.id} child={child} />)
             ) : (
               <div className="col-span-full rounded-[22px] border border-dashed border-app-line bg-slate-50 px-6 py-8 text-center text-sm text-slate-500">
                 Nenhuma crianca cadastrada ainda. Use a barra lateral para criar o primeiro perfil.

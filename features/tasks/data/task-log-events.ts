@@ -1,8 +1,6 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Task } from "../types";
 
-const supabase = createBrowserSupabaseClient();
-
 export type TaskHistoryAction = "add" | "remove";
 
 export type TaskHistoryEntry = {
@@ -22,6 +20,7 @@ type TaskLogEventRow = {
   child_id: string;
   period_id: string;
   task_id: string;
+  owner_user_id?: string | null;
   task_type: Task["type"];
   action: TaskHistoryAction;
   created_at: string;
@@ -31,15 +30,30 @@ type TaskLogEventRow = {
   } | null;
 };
 
+async function getUserScopedClient() {
+  const supabase = createBrowserSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  return { supabase, userId: user?.id ?? null };
+}
+
 export async function getTaskLogEventsByPeriod(
   childId: string,
   periodId: string
 ): Promise<TaskHistoryEntry[]> {
+  const { supabase, userId } = await getUserScopedClient();
+  if (!userId) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("task_log_events")
-    .select("id, child_id, period_id, task_id, task_type, action, created_at, task:tasks(title, amount)")
+    .select("id, child_id, period_id, task_id, owner_user_id, task_type, action, created_at, task:tasks(title, amount)")
     .eq("child_id", childId)
     .eq("period_id", periodId)
+    .eq("owner_user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -56,11 +70,17 @@ export async function createTaskLogEvent(
   task: Task,
   action: TaskHistoryAction
 ): Promise<boolean> {
+  const { supabase, userId } = await getUserScopedClient();
+  if (!userId) {
+    return false;
+  }
+
   const { error } = await supabase.from("task_log_events").insert([
     {
       child_id: childId,
       period_id: periodId,
       task_id: task.id,
+      owner_user_id: userId,
       task_type: task.type,
       action
     }

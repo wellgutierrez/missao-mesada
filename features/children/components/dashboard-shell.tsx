@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { ReactNode } from "react";
 import type { Child } from "../types";
 
@@ -32,12 +34,27 @@ export function DashboardShell({
   guideBlocks,
   children
 }: DashboardShellProps) {
+  const router = useRouter();
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const selectedChild = useMemo(
     () => childList.find((child) => child.id === selectedChildId) ?? null,
     [childList, selectedChildId]
   );
+
+  async function handleSignOut() {
+    setIsSigningOut(true);
+
+    try {
+      const supabase = createBrowserSupabaseClient();
+      await supabase.auth.signOut();
+    } finally {
+      router.push("/cadastro");
+      router.refresh();
+      setIsSigningOut(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-app-bg text-slate-900">
@@ -61,11 +78,20 @@ export function DashboardShell({
 
             {headerActions}
 
+            <Link
+              href="/perfil"
+              className="inline-flex items-center rounded-xl border border-app-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Perfil
+            </Link>
+
             <button
               type="button"
-              className="rounded-xl bg-app-danger px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(239,68,68,0.75)]"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              className="rounded-xl bg-app-danger px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(239,68,68,0.75)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sair
+              {isSigningOut ? "Saindo..." : "Sair"}
             </button>
           </div>
         </div>

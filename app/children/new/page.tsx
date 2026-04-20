@@ -1,12 +1,18 @@
+import { AdminLink } from "@/features/admin/components/admin-link";
+import { hasAdminAccess } from "@/features/admin/data/get-admin-dashboard";
 import { DashboardShell } from "@/features/children/components/dashboard-shell";
 import { NewChildForm } from "@/features/children/components/new-child-form";
+import { claimLegacyDataIfNeeded } from "@/features/auth/data/claim-legacy-data";
+import { requireAuth } from "@/features/auth/data/get-auth-user";
 import { getChildren } from "@/features/children/data/get-children";
 
 export default async function NewChildPage() {
-  const { children } = await getChildren();
+  await requireAuth();
+  await claimLegacyDataIfNeeded();
+  const [isAdmin, { children }] = await Promise.all([hasAdminAccess(), getChildren()]);
 
   return (
-    <DashboardShell childList={children}>
+    <DashboardShell childList={children} headerActions={isAdmin ? <AdminLink /> : undefined}>
       <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <div className="rounded-[28px] border border-app-line bg-white p-6 shadow-[0_24px_70px_-42px_rgba(53,99,233,0.35)]">
           <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -21,16 +27,16 @@ export default async function NewChildPage() {
                   Monte o perfil inicial do acompanhamento
                 </h1>
                 <p className="mt-3 max-w-2xl text-base leading-8 text-slate-600">
-                  Use a mesma estrutura da interface principal: crie a crianca, abra o primeiro periodo automaticamente e siga para o registro de tarefas e resumo.
+                  Crie a crianca, depois escolha manualmente o primeiro periodo para iniciar o acompanhamento de tarefas e resumo.
                 </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-[24px] border border-app-line bg-app-soft p-5">
                   <p className="text-sm font-semibold uppercase tracking-[0.14em] text-app-primary">Fluxo</p>
-                  <p className="mt-3 text-lg font-bold text-slate-900">Criacao imediata do primeiro periodo</p>
+                  <p className="mt-3 text-lg font-bold text-slate-900">Criacao da crianca e escolha do primeiro periodo</p>
                   <p className="mt-2 text-sm leading-7 text-slate-600">
-                    A crianca entra pronta para uso, com periodo semanal inicial aberto automaticamente.
+                    O perfil e criado primeiro. Depois o responsavel decide quando e como abrir o periodo inicial.
                   </p>
                 </div>
                 <div className="rounded-[24px] border border-app-line bg-white p-5">

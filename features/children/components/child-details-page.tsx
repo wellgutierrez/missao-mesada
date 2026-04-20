@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/features/children/components/dashboard-shell";
+import { deleteChildAction } from "@/features/children/actions/delete-child";
 import { getAgeBasedSuggestions, getTaskSuggestionsByAge } from "@/features/children/data/age-based-suggestions";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -14,6 +15,7 @@ import {
 import {
   createTaskLogEvent,
   getTaskLogEventsByPeriod,
+  type TaskHistoryAction,
   type TaskHistoryEntry
 } from "@/features/tasks/data/task-log-events";
 import {
@@ -24,6 +26,7 @@ import {
   getPeriodSummariesByChild
 } from "@/features/children/data/periods";
 
+import type { ReactNode } from "react";
 import type { Child, AllowancePeriod, PeriodType, PeriodSummary } from "../types";
 import type { Task } from "@/features/tasks/types";
 
@@ -31,6 +34,7 @@ type ChildDetailsPageProps = {
   child: Child;
   tasks: Task[];
   childList: Child[];
+  headerActions?: ReactNode;
 };
 
 type TaskCountMap = Record<string, number>;
@@ -67,7 +71,7 @@ const GUIDE_BLOCKS = [
       "brincar de algo que ela gosta"
     ]
   }
-] as const;
+];
 
 const TAB_ITEMS = [
   { key: "registro", label: "Registro" },
@@ -75,7 +79,7 @@ const TAB_ITEMS = [
   { key: "resumo", label: "Resumo" }
 ] as const satisfies ReadonlyArray<{ key: Tab; label: string }>;
 
-export function ChildDetailsPage({ child, tasks, childList }: ChildDetailsPageProps) {
+export function ChildDetailsPage({ child, tasks, childList, headerActions }: ChildDetailsPageProps) {
   const [taskLogs, setTaskLogs] = useState<TaskLogRow[]>([]);
   const [taskHistory, setTaskHistory] = useState<TaskHistoryEntry[]>([]);
   const [isSaving, setIsSaving] = useState<Record<string, boolean>>({});
@@ -90,6 +94,7 @@ export function ChildDetailsPage({ child, tasks, childList }: ChildDetailsPagePr
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showRewardModal, setShowRewardModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isDeletingChild, setIsDeletingChild] = useState(false);
   const [selectedHistorySummary, setSelectedHistorySummary] = useState<PeriodSummary | null>(null);
   const [taskModalType, setTaskModalType] = useState<"bonus" | "discount">("bonus");
   const [taskForm, setTaskForm] = useState({
@@ -309,9 +314,19 @@ export function ChildDetailsPage({ child, tasks, childList }: ChildDetailsPagePr
 
     try {
       const supabase = createBrowserSupabaseClient();
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setLoadError("Sua sessao expirou. Entre novamente para continuar.");
+        return;
+      }
+
       const { error } = await supabase.from("tasks").insert([
         {
           child_id: child.id,
+          owner_user_id: user.id,
           title: taskForm.title,
           type: taskModalType,
           amount: taskForm.amount,
@@ -398,6 +413,33 @@ export function ChildDetailsPage({ child, tasks, childList }: ChildDetailsPagePr
         ...current,
         [taskId]: false
       }));
+    }
+  }
+
+  async function handleDeleteChild() {
+    const confirmDelete = window.confirm(
+      `Excluir o perfil de ${child.name}? Todas as tarefas, periodos e historicos dessa crianca serao apagados.`
+    );
+
+    if (!confirmDelete) {
+      return;
+    }
+
+    setIsDeletingChild(true);
+    setLoadError(null);
+
+    try {
+      const result = await deleteChildAction(child.id);
+
+      if (result.error) {
+        setLoadError(result.error);
+        return;
+      }
+
+      router.push(`/?deletedChild=${encodeURIComponent(child.name)}`);
+      router.refresh();
+    } finally {
+      setIsDeletingChild(false);
     }
   }
 
@@ -498,6 +540,7 @@ export function ChildDetailsPage({ child, tasks, childList }: ChildDetailsPagePr
     <DashboardShell
       childList={childList}
       selectedChildId={child.id}
+      headerActions={headerActions}
       guideTitle="Como usar o Missao Mesada com seu filho"
       guideIntro="As tarefas e recompensas sugeridas no app sao baseadas na faixa etaria da crianca, para ajudar no desenvolvimento de responsabilidade, autonomia e vinculo com os pais."
       guideBlocks={[...GUIDE_BLOCKS]}
@@ -505,6 +548,34 @@ export function ChildDetailsPage({ child, tasks, childList }: ChildDetailsPagePr
       <div className="space-y-4 p-4 sm:p-6 lg:p-8">
         <div className="overflow-hidden rounded-[28px] border border-app-line bg-white shadow-[0_24px_70px_-42px_rgba(53,99,233,0.35)]">
           <div className="border-b border-app-line px-4 sm:px-6">
+            <div className="flex flex-wrap items-start justify-between gap-4 py-5">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-app-primary">Perfil da crianca</p>
+                <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.04em] text-slate-900">{child.name}</h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  {child.age ? `${child.age} anos` : "Idade nao informada"} · Mesada base {formatCurrency(child.base_allowance)}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.push("/")}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-app-line bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Voltar ao painel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteChild}
+                  disabled={isDeletingChild}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeletingChild ? "Excluindo..." : "Excluir crianca"}
+                </button>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-center gap-8 md:justify-between">
               {TAB_ITEMS.map((tab) => (
                 <button

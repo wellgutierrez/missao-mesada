@@ -1,26 +1,40 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Task } from "../types";
 
-const supabase = createBrowserSupabaseClient();
-
 export type TaskLogRow = {
   id: string;
   child_id: string;
   period_id: string;
   task_id: string;
+  owner_user_id?: string | null;
   count: number;
   created_at?: string | null;
 };
+
+async function getUserScopedClient() {
+  const supabase = createBrowserSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  return { supabase, userId: user?.id ?? null };
+}
 
 export async function getTaskLogsByPeriod(
   childId: string,
   periodId: string
 ): Promise<TaskLogRow[]> {
+  const { supabase, userId } = await getUserScopedClient();
+  if (!userId) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("task_logs")
-    .select("id, child_id, period_id, task_id, count, created_at")
+    .select("id, child_id, period_id, task_id, owner_user_id, count, created_at")
     .eq("child_id", childId)
     .eq("period_id", periodId)
+    .eq("owner_user_id", userId)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -36,12 +50,18 @@ export async function addTaskLog(
   periodId: string,
   task: Task
 ): Promise<TaskLogRow | null> {
+  const { supabase, userId } = await getUserScopedClient();
+  if (!userId) {
+    return null;
+  }
+
   const { data: existing, error: selectError } = await supabase
     .from("task_logs")
     .select("id, count")
     .eq("child_id", childId)
     .eq("period_id", periodId)
     .eq("task_id", task.id)
+    .eq("owner_user_id", userId)
     .maybeSingle();
 
   if (selectError) {
@@ -54,7 +74,8 @@ export async function addTaskLog(
       .from("task_logs")
       .update({ count: existing.count + 1 })
       .eq("id", existing.id)
-      .select("id, child_id, period_id, task_id, count, created_at")
+      .eq("owner_user_id", userId)
+      .select("id, child_id, period_id, task_id, owner_user_id, count, created_at")
       .single();
 
     if (error) {
@@ -72,10 +93,11 @@ export async function addTaskLog(
         child_id: childId,
         period_id: periodId,
         task_id: task.id,
+        owner_user_id: userId,
         count: 1
       }
     ])
-    .select("id, child_id, period_id, task_id, count, created_at")
+    .select("id, child_id, period_id, task_id, owner_user_id, count, created_at")
     .single();
 
   if (error) {
@@ -91,12 +113,18 @@ export async function decrementTaskLog(
   periodId: string,
   taskId: string
 ): Promise<boolean> {
+  const { supabase, userId } = await getUserScopedClient();
+  if (!userId) {
+    return false;
+  }
+
   const { data: existing, error: selectError } = await supabase
     .from("task_logs")
     .select("id, count")
     .eq("child_id", childId)
     .eq("period_id", periodId)
     .eq("task_id", taskId)
+    .eq("owner_user_id", userId)
     .maybeSingle();
 
   if (selectError) {
@@ -112,7 +140,8 @@ export async function decrementTaskLog(
     const { error } = await supabase
       .from("task_logs")
       .delete()
-      .eq("id", existing.id);
+      .eq("id", existing.id)
+      .eq("owner_user_id", userId);
 
     if (error) {
       console.error("Erro ao deletar task_log:", error.message ?? error);
@@ -125,7 +154,8 @@ export async function decrementTaskLog(
   const { error } = await supabase
     .from("task_logs")
     .update({ count: existing.count - 1 })
-    .eq("id", existing.id);
+    .eq("id", existing.id)
+    .eq("owner_user_id", userId);
 
   if (error) {
     console.error("Erro ao decrementar task_log:", error.message ?? error);

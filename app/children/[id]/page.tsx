@@ -1,4 +1,8 @@
 import { notFound } from "next/navigation";
+import { AdminLink } from "@/features/admin/components/admin-link";
+import { hasAdminAccess } from "@/features/admin/data/get-admin-dashboard";
+import { claimLegacyDataIfNeeded } from "@/features/auth/data/claim-legacy-data";
+import { requireAuth } from "@/features/auth/data/get-auth-user";
 import { ChildDetailsPage } from "@/features/children/components/child-details-page";
 import { getChildren } from "@/features/children/data/get-children";
 import { getChildById } from "@/features/children/data/get-child";
@@ -11,10 +15,15 @@ type ChildPageProps = {
 };
 
 export default async function ChildPage({ params }: ChildPageProps) {
+  await requireAuth();
+  await claimLegacyDataIfNeeded();
   const { id } = await params;
 
-  const { child, errorMessage } = await getChildById(id);
-  const { children } = await getChildren();
+  const [isAdmin, { child, errorMessage }, { children }] = await Promise.all([
+    hasAdminAccess(),
+    getChildById(id),
+    getChildren()
+  ]);
 
   if (!child || errorMessage) {
     return notFound();
@@ -22,5 +31,12 @@ export default async function ChildPage({ params }: ChildPageProps) {
 
   const tasks = await getTasksByChildId(id);
 
-  return <ChildDetailsPage child={child} tasks={tasks} childList={children} />;
+  return (
+    <ChildDetailsPage
+      child={child}
+      tasks={tasks}
+      childList={children}
+      headerActions={isAdmin ? <AdminLink /> : undefined}
+    />
+  );
 }

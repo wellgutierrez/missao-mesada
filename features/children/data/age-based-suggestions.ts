@@ -1,11 +1,6 @@
 import type { Task } from "@/features/tasks/types";
 
-type SuggestionAgeGroupKey =
-  | "4-6"
-  | "7-9"
-  | "10-12"
-  | "13-15"
-  | "16-18";
+type SuggestionAgeGroupKey = "4-6" | "7-9" | "10-12" | "13-15" | "16-18";
 
 export type SuggestionAgeGroup = {
   key: SuggestionAgeGroupKey;

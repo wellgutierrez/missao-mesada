@@ -5,6 +5,15 @@ function getPeriodsSupabaseClient() {
   return createBrowserSupabaseClient();
 }
 
+async function getCurrentUserId() {
+  const supabase = getPeriodsSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  return user?.id ?? null;
+}
+
 export function calculateEndDate(startDate: string, periodType: PeriodType) {
   const date = new Date(startDate);
 
@@ -31,50 +40,30 @@ export function calculateEndDate(startDate: string, periodType: PeriodType) {
 
 export async function getOpenPeriodByChild(childId: string): Promise<AllowancePeriod | null> {
   if (!childId?.trim()) {
-    console.error("getOpenPeriodByChild: childId inválido");
+    console.error("getOpenPeriodByChild: childId invalido");
+    return null;
+  }
+
+  const userId = await getCurrentUserId();
+  if (!userId) {
     return null;
   }
 
   const supabase = getPeriodsSupabaseClient();
   const { data, error } = await supabase
     .from("allowance_periods")
-    .select(
-      "id, child_id, period_type, start_date, end_date, base_allowance, bonus_goal, reward_title, status, created_at, closed_at"
-    )
+    .select("id, child_id, owner_user_id, period_type, start_date, end_date, base_allowance, bonus_goal, reward_title, status, created_at, closed_at")
     .eq("child_id", childId)
+    .eq("owner_user_id", userId)
     .eq("status", "open")
     .maybeSingle();
 
   if (error) {
-    console.error("Erro ao buscar período aberto:", error.message ?? error);
+    console.error("Erro ao buscar periodo aberto:", error.message ?? error);
     return null;
   }
 
   return data ? (data as AllowancePeriod) : null;
-}
-
-export async function getClosedPeriodsByChild(childId: string): Promise<AllowancePeriod[]> {
-  if (!childId?.trim()) {
-    console.error("getClosedPeriodsByChild: childId inválido");
-    return [];
-  }
-
-  const supabase = getPeriodsSupabaseClient();
-  const { data, error } = await supabase
-    .from("allowance_periods")
-    .select(
-      "id, child_id, period_type, start_date, end_date, base_allowance, bonus_goal, reward_title, status, created_at, closed_at"
-    )
-    .eq("child_id", childId)
-    .eq("status", "closed")
-    .order("start_date", { ascending: false });
-
-  if (error) {
-    console.error("Erro ao buscar períodos fechados:", error.message ?? error);
-    return [];
-  }
-
-  return (data ?? []) as AllowancePeriod[];
 }
 
 export async function createOpenPeriod(
@@ -86,7 +75,12 @@ export async function createOpenPeriod(
   bonusGoal: number
 ): Promise<AllowancePeriod | null> {
   if (!childId?.trim()) {
-    console.error("createOpenPeriod: childId inválido");
+    console.error("createOpenPeriod: childId invalido");
+    return null;
+  }
+
+  const userId = await getCurrentUserId();
+  if (!userId) {
     return null;
   }
 
@@ -95,7 +89,6 @@ export async function createOpenPeriod(
 
   const existingOpen = await getOpenPeriodByChild(childId);
   if (existingOpen) {
-    console.warn("Já existe um período aberto para essa criança", childId);
     return existingOpen;
   }
 
@@ -104,6 +97,7 @@ export async function createOpenPeriod(
     .insert([
       {
         child_id: childId,
+        owner_user_id: userId,
         period_type: periodType,
         start_date: startDate,
         end_date: endDate,
@@ -113,20 +107,11 @@ export async function createOpenPeriod(
         status: "open"
       }
     ])
-    .select(
-      "id, child_id, period_type, start_date, end_date, base_allowance, bonus_goal, reward_title, status, created_at, closed_at"
-    )
+    .select("id, child_id, owner_user_id, period_type, start_date, end_date, base_allowance, bonus_goal, reward_title, status, created_at, closed_at")
     .single();
 
   if (error) {
-    console.error("Erro ao criar período:", error.message ?? error, {
-      childId,
-      periodType,
-      startDate,
-      baseAmount,
-      rewardTitle,
-      bonusGoal
-    });
+    console.error("Erro ao criar periodo:", error.message ?? error);
     return null;
   }
 
@@ -146,15 +131,15 @@ export async function closePeriod(
   startedAt: string,
   endedAt: string
 ): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return false;
+  }
+
   const supabase = getPeriodsSupabaseClient();
 
-  // Primeiro, verificar se já existe summary
   const exists = await checkPeriodSummaryExists(periodId);
-  if (exists) {
-    console.warn("Period summary já existe para periodId:", periodId);
-    // Ainda assim, fechar o período
-  } else {
-    // Criar o summary
+  if (!exists) {
     const rewardAchieved = bonusCompleted >= bonusGoal;
     const summary = await createPeriodSummary(
       periodId,
@@ -170,47 +155,38 @@ export async function closePeriod(
       startedAt,
       endedAt
     );
+
     if (!summary) {
-      console.error("Falha ao criar period summary");
       return false;
     }
   }
 
-  // Fechar o período
   const { error } = await supabase
     .from("allowance_periods")
     .update({ status: "closed", closed_at: new Date().toISOString() })
-    .eq("id", periodId);
+    .eq("id", periodId)
+    .eq("owner_user_id", userId);
 
   if (error) {
-    console.error("Erro ao encerrar período:", error.message ?? error);
+    console.error("Erro ao encerrar periodo:", error.message ?? error);
     return false;
   }
 
   return true;
 }
 
-export async function createFirstPeriod(
-  childId: string,
-  baseAmount: number
-): Promise<AllowancePeriod | null> {
-  const today = new Date().toISOString().split("T")[0];
-  return createOpenPeriod(
-    childId,
-    "weekly",
-    today,
-    baseAmount,
-    "Sem recompensa definida",
-    5
-  );
-}
-
 export async function checkPeriodSummaryExists(periodId: string): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return false;
+  }
+
   const supabase = getPeriodsSupabaseClient();
   const { data, error } = await supabase
     .from("period_summaries")
     .select("id")
     .eq("period_id", periodId)
+    .eq("owner_user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -235,14 +211,19 @@ export async function createPeriodSummary(
   startedAt: string,
   endedAt: string
 ): Promise<PeriodSummary | null> {
-  const supabase = getPeriodsSupabaseClient();
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return null;
+  }
 
+  const supabase = getPeriodsSupabaseClient();
   const { data, error } = await supabase
     .from("period_summaries")
     .insert([
       {
         period_id: periodId,
         child_id: childId,
+        owner_user_id: userId,
         base_allowance: baseAllowance,
         total_bonus: totalBonus,
         total_discount: totalDiscount,
@@ -255,7 +236,7 @@ export async function createPeriodSummary(
         ended_at: endedAt
       }
     ])
-    .select()
+    .select("*")
     .single();
 
   if (error) {
@@ -267,11 +248,17 @@ export async function createPeriodSummary(
 }
 
 export async function getPeriodSummariesByChild(childId: string): Promise<PeriodSummary[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return [];
+  }
+
   const supabase = getPeriodsSupabaseClient();
   const { data, error } = await supabase
     .from("period_summaries")
     .select("*")
     .eq("child_id", childId)
+    .eq("owner_user_id", userId)
     .order("started_at", { ascending: false });
 
   if (error) {

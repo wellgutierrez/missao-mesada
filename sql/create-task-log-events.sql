@@ -1,6 +1,6 @@
 -- Missao Mesada
 -- Tabela para armazenar o historico detalhado de marcacao e desmarcacao de tarefas.
--- Execute este arquivo no SQL Editor do Supabase.
+-- Execute este arquivo no SQL Editor do Supabase apenas se a tabela public.task_log_events ainda nao existir.
 
 create extension if not exists pgcrypto;
 
@@ -35,7 +35,5 @@ comment on column public.task_log_events.task_type is
 comment on column public.task_log_events.action is
   'Acao realizada pelo usuario: add para marcar, remove para desmarcar.';
 
--- O app atual usa anon key sem autenticacao de usuario.
--- Para manter compatibilidade com o comportamento atual das outras tabelas,
--- esta tabela fica sem RLS por enquanto.
+-- A ativacao de owner_user_id, RLS e policies desta tabela acontece em sql/add-owner-user-id.sql.
 alter table public.task_log_events disable row level security;
