@@ -78,7 +78,46 @@ describe("admin dashboard data", () => {
     expect(rpc).toHaveBeenCalledWith("get_admin_dashboard_snapshot");
     expect(result.errorMessage).toBe("Erro ao carregar painel administrativo: rpc indisponivel");
     expect(result.snapshot.totals.registered_users).toBe(0);
+    expect(result.snapshot.activation_funnel.users_with_children).toBe(0);
+    expect(result.snapshot.recent_activity.task_logs_last_7_days).toBe(0);
+    expect(result.snapshot.alerts).toEqual([]);
     expect(result.snapshot.recent_signups).toEqual([]);
+  });
+
+  it("normalizes the new analytics sections returned by the dashboard rpc", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { user_id: "user-123", role: "manager" },
+      error: null
+    });
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    const from = vi.fn(() => ({ select }));
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        activation_funnel: {
+          users_with_children: 4,
+          periods_with_task_logs: 2
+        },
+        recent_activity: {
+          active_users_last_7_days: 3
+        },
+        alerts: [{ id: "children_without_tasks", count: 5 }]
+      },
+      error: null
+    });
+
+    mockGetAuthUser.mockResolvedValue({ id: "user-123" });
+    mockCreateServerSupabaseClient.mockResolvedValue({ from, rpc });
+
+    const { getAdminDashboardSnapshot } = await import("@/features/admin/data/get-admin-dashboard");
+    const result = await getAdminDashboardSnapshot();
+
+    expect(result.snapshot.activation_funnel.registered_users).toBe(0);
+    expect(result.snapshot.activation_funnel.users_with_children).toBe(4);
+    expect(result.snapshot.activation_funnel.periods_with_task_logs).toBe(2);
+    expect(result.snapshot.recent_activity.task_logs_last_7_days).toBe(0);
+    expect(result.snapshot.recent_activity.active_users_last_7_days).toBe(3);
+    expect(result.snapshot.alerts).toEqual([{ id: "children_without_tasks", count: 5 }]);
   });
 
   it("returns no admin users for non-owner memberships without calling the rpc", async () => {

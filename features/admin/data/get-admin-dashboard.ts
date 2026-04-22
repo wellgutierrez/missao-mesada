@@ -46,6 +46,24 @@ export type AdminTopFamily = {
   open_periods_count: number;
 };
 
+export type AdminActivationFunnel = {
+  registered_users: number;
+  users_with_children: number;
+  children_with_tasks: number;
+  periods_with_task_logs: number;
+};
+
+export type AdminRecentActivity = {
+  task_logs_last_7_days: number;
+  active_users_last_7_days: number;
+  closed_periods_last_7_days: number;
+};
+
+export type AdminAlertRecord = {
+  id: "users_without_children" | "children_without_tasks" | "periods_without_task_logs";
+  count: number;
+};
+
 export type AdminUserRecord = {
   user_id: string;
   email: string;
@@ -56,6 +74,9 @@ export type AdminUserRecord = {
 
 export type AdminDashboardSnapshot = {
   totals: AdminDashboardTotals;
+  activation_funnel: AdminActivationFunnel;
+  recent_activity: AdminRecentActivity;
+  alerts: AdminAlertRecord[];
   recent_signups: AdminRecentSignup[];
   recent_children: AdminRecentChild[];
   top_families: AdminTopFamily[];
@@ -75,6 +96,18 @@ const EMPTY_SNAPSHOT: AdminDashboardSnapshot = {
     task_logs: 0,
     task_log_events: 0
   },
+  activation_funnel: {
+    registered_users: 0,
+    users_with_children: 0,
+    children_with_tasks: 0,
+    periods_with_task_logs: 0
+  },
+  recent_activity: {
+    task_logs_last_7_days: 0,
+    active_users_last_7_days: 0,
+    closed_periods_last_7_days: 0
+  },
+  alerts: [],
   recent_signups: [],
   recent_children: [],
   top_families: []
@@ -171,7 +204,7 @@ export async function getAdminUsers(): Promise<{
 }
 
 function normalizeSnapshot(value: unknown): AdminDashboardSnapshot {
-  if (!value || typeof value !== "object") {
+  if (!isObjectRecord(value)) {
     return EMPTY_SNAPSHOT;
   }
 
@@ -180,10 +213,23 @@ function normalizeSnapshot(value: unknown): AdminDashboardSnapshot {
   return {
     totals: {
       ...EMPTY_SNAPSHOT.totals,
-      ...(raw.totals ?? {})
+      ...(isObjectRecord(raw.totals) ? raw.totals : {})
     },
+    activation_funnel: {
+      ...EMPTY_SNAPSHOT.activation_funnel,
+      ...(isObjectRecord(raw.activation_funnel) ? raw.activation_funnel : {})
+    },
+    recent_activity: {
+      ...EMPTY_SNAPSHOT.recent_activity,
+      ...(isObjectRecord(raw.recent_activity) ? raw.recent_activity : {})
+    },
+    alerts: Array.isArray(raw.alerts) ? (raw.alerts as AdminAlertRecord[]) : [],
     recent_signups: Array.isArray(raw.recent_signups) ? (raw.recent_signups as AdminRecentSignup[]) : [],
     recent_children: Array.isArray(raw.recent_children) ? (raw.recent_children as AdminRecentChild[]) : [],
     top_families: Array.isArray(raw.top_families) ? (raw.top_families as AdminTopFamily[]) : []
   };
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
