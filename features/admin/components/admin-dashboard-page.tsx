@@ -13,6 +13,7 @@ type AdminDashboardPageProps = {
 };
 
 export function AdminDashboardPage({ role, snapshot, adminUsers = [], errorMessage, adminUsersErrorMessage }: AdminDashboardPageProps) {
+  const productHealth = getProductHealth(snapshot);
   const cards = [
     { label: "Usuarios cadastrados", value: snapshot.totals.registered_users },
     { label: "Admins liberados", value: snapshot.totals.admin_users },
@@ -31,11 +32,14 @@ export function AdminDashboardPage({ role, snapshot, adminUsers = [], errorMessa
     { label: "Com crianca", value: snapshot.activation_funnel.users_with_children, helper: "Usuarios que deram o primeiro passo de configuracao familiar." },
     { label: "Com tarefas", value: snapshot.activation_funnel.children_with_tasks, helper: "Criancas com ao menos uma tarefa cadastrada." },
     { label: "Com registros", value: snapshot.activation_funnel.periods_with_task_logs, helper: "Periodos que ja registraram execucao de tarefas." }
-  ];
+  ].map((step, index, steps) => ({
+    ...step,
+    conversionRate: index === 0 ? 100 : getPercentage(step.value, steps[index - 1]?.value ?? 0)
+  }));
   const recentActivityCards = [
-    { label: "Registros nos ultimos 7 dias", value: snapshot.recent_activity.task_logs_last_7_days, helper: "Volume recente de uso operacional no app." },
-    { label: "Usuarios ativos nos ultimos 7 dias", value: snapshot.recent_activity.active_users_last_7_days, helper: "Responsaveis com novos registros de tarefas no periodo." },
-    { label: "Periodos fechados nos ultimos 7 dias", value: snapshot.recent_activity.closed_periods_last_7_days, helper: "Ciclos concluídos recentemente pelas familias." }
+    { label: "Registros de tarefas", metric: snapshot.recent_activity.task_logs, helper: "Volume recente de uso operacional no app." },
+    { label: "Usuarios ativos", metric: snapshot.recent_activity.active_users, helper: "Responsaveis com novos registros de tarefas no periodo." },
+    { label: "Periodos fechados", metric: snapshot.recent_activity.closed_periods, helper: "Ciclos concluidos recentemente pelas familias." }
   ];
 
   return (
@@ -68,6 +72,11 @@ export function AdminDashboardPage({ role, snapshot, adminUsers = [], errorMessa
           description="Este painel concentra a saude operacional do Missao Mesada: quantos usuarios entraram, quantas criancas estao ativas no sistema e como as familias estao usando tarefas e periodos."
           className="rounded-[28px]"
         >
+          <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-app-line bg-slate-50 px-4 py-4">
+            <span className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Status geral do produto</span>
+            <span className={getHealthBadgeClassName(productHealth.tone)}>{productHealth.label}</span>
+            <p className="text-sm leading-6 text-slate-600">{productHealth.message}</p>
+          </div>
 
           {errorMessage ? (
             <div className="mt-5 rounded-2xl border-l-4 border-amber-400 bg-amber-50 px-4 py-4 text-sm text-amber-900">
@@ -95,8 +104,16 @@ export function AdminDashboardPage({ role, snapshot, adminUsers = [], errorMessa
               {funnelSteps.map((step, index) => (
                 <div key={step.label}>
                   <AdminCard className="rounded-[22px] bg-slate-50 px-5 py-5 shadow-none">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{step.label}</p>
-                    <p className="mt-3 text-4xl font-extrabold tracking-[-0.04em] text-slate-900">{formatNumber(step.value)}</p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{step.label}</p>
+                        <p className="mt-3 text-4xl font-extrabold tracking-[-0.04em] text-slate-900">{formatNumber(step.value)}</p>
+                      </div>
+                      <div className="rounded-xl bg-white px-3 py-2 text-right">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Conversao</p>
+                        <p className="mt-1 text-lg font-extrabold tracking-[-0.03em] text-app-primary">{formatPercent(step.conversionRate)}</p>
+                      </div>
+                    </div>
                     <p className="mt-2 text-sm leading-6 text-slate-500">{step.helper}</p>
                   </AdminCard>
                   {index < funnelSteps.length - 1 ? <p className="py-2 text-center text-2xl font-black text-app-primary">↓</p> : null}
@@ -115,8 +132,18 @@ export function AdminDashboardPage({ role, snapshot, adminUsers = [], errorMessa
                 {recentActivityCards.map((item) => (
                   <AdminCard key={item.label} className="rounded-[22px] bg-slate-50 px-5 py-5 shadow-none">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{item.label}</p>
-                    <p className="mt-3 text-4xl font-extrabold tracking-[-0.04em] text-slate-900">{formatNumber(item.value)}</p>
+                    <div className="mt-3 flex items-end justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Ultimos 7 dias</p>
+                        <p className="mt-1 text-4xl font-extrabold tracking-[-0.04em] text-slate-900">{formatNumber(item.metric.last_7_days)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Ultimos 30 dias</p>
+                        <p className="mt-1 text-2xl font-extrabold tracking-[-0.03em] text-slate-700">{formatNumber(item.metric.last_30_days)}</p>
+                      </div>
+                    </div>
                     <p className="mt-2 text-sm leading-6 text-slate-500">{item.helper}</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-700">{formatComparisonLabel(item.metric.last_7_days, item.metric.last_30_days)}</p>
                   </AdminCard>
                 ))}
               </div>
@@ -136,6 +163,7 @@ export function AdminDashboardPage({ role, snapshot, adminUsers = [], errorMessa
                           <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">Alerta</p>
                           <p className="mt-2 text-lg font-bold tracking-[-0.02em] text-slate-900">{getAlertTitle(alert)}</p>
                           <p className="mt-1 text-sm leading-6 text-slate-600">{getAlertDescription(alert)}</p>
+                          <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-amber-800">Acao sugerida: {getAlertAction(alert)}</p>
                         </div>
                         <p className="text-3xl font-extrabold tracking-[-0.03em] text-amber-700">{formatNumber(alert.count)}</p>
                       </div>
@@ -245,6 +273,10 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value ?? 0);
 }
 
+function formatPercent(value: number) {
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: value > 0 && value < 10 ? 1 : 0 }).format(value)}%`;
+}
+
 function formatDateTime(value: string | null) {
   if (!value) {
     return "Sem data";
@@ -258,6 +290,86 @@ function formatDateTime(value: string | null) {
 
 function truncateId(value: string) {
   return `${value.slice(0, 8)}...`;
+}
+
+function getPercentage(current: number, previous: number) {
+  if (previous <= 0) {
+    return 0;
+  }
+
+  return (current / previous) * 100;
+}
+
+function formatComparisonLabel(last7Days: number, last30Days: number) {
+  const baseline = last30Days <= 0 ? 0 : (last7Days / last30Days) * 100;
+
+  if (last30Days <= 0 && last7Days <= 0) {
+    return "Sem atividade nos ultimos 30 dias.";
+  }
+
+  if (last30Days <= 0) {
+    return "Toda a atividade observada aconteceu nos ultimos 7 dias.";
+  }
+
+  return `${formatPercent(baseline)} do volume acumulado dos ultimos 30 dias aconteceu na ultima semana.`;
+}
+
+function getHealthBadgeClassName(tone: ProductHealthTone) {
+  const baseClassName = "inline-flex min-h-10 items-center justify-center rounded-full px-4 text-sm font-extrabold uppercase tracking-[0.12em]";
+
+  switch (tone) {
+    case "healthy":
+      return `${baseClassName} bg-emerald-100 text-emerald-800`;
+    case "warning":
+      return `${baseClassName} bg-amber-100 text-amber-800`;
+    case "critical":
+      return `${baseClassName} bg-rose-100 text-rose-800`;
+    default:
+      return `${baseClassName} bg-slate-100 text-slate-800`;
+  }
+}
+
+type ProductHealthTone = "healthy" | "warning" | "critical";
+
+function getProductHealth(snapshot: AdminDashboardSnapshot) {
+  const registrationToChildren = getPercentage(
+    snapshot.activation_funnel.users_with_children,
+    snapshot.activation_funnel.registered_users
+  );
+  const childrenToTasks = getPercentage(
+    snapshot.activation_funnel.children_with_tasks,
+    snapshot.activation_funnel.users_with_children
+  );
+  const tasksToLogs = getPercentage(
+    snapshot.activation_funnel.periods_with_task_logs,
+    snapshot.activation_funnel.children_with_tasks
+  );
+  const weeklyActiveCoverage = getPercentage(
+    snapshot.recent_activity.active_users.last_7_days,
+    snapshot.activation_funnel.users_with_children
+  );
+
+  if (registrationToChildren < 25 || tasksToLogs < 20 || snapshot.recent_activity.task_logs.last_7_days === 0) {
+    return {
+      label: "Critico",
+      tone: "critical" as const,
+      message: "A ativacao ou a atividade recente estao baixas. Priorize onboarding, criacao de tarefas e retomada de familias inativas."
+    };
+  }
+
+  if (registrationToChildren < 45 || childrenToTasks < 55 || weeklyActiveCoverage < 20) {
+    return {
+      label: "Atencao",
+      tone: "warning" as const,
+      message: "O produto mostra tracao, mas ainda existem gargalos relevantes entre cadastro, configuracao e uso recorrente."
+    };
+  }
+
+  return {
+    label: "Saudavel",
+    tone: "healthy" as const,
+    message: "Ativacao e atividade recente estao em niveis consistentes para o volume atual do produto."
+  };
 }
 
 function getAlertTitle(alert: AdminAlertRecord) {
@@ -283,5 +395,18 @@ function getAlertDescription(alert: AdminAlertRecord) {
       return `${formatNumber(alert.count)} periodos existem sem qualquer registro de tarefa, indicando risco de abandono ou setup incompleto.`;
     default:
       return `${formatNumber(alert.count)} ocorrencias exigem acompanhamento.`;
+  }
+}
+
+function getAlertAction(alert: AdminAlertRecord) {
+  switch (alert.id) {
+    case "users_without_children":
+      return "Disparar onboarding guiado para concluir o cadastro da primeira crianca.";
+    case "children_without_tasks":
+      return "Sugerir templates de tarefas prontos logo apos a criacao da crianca.";
+    case "periods_without_task_logs":
+      return "Lembrar os responsaveis de registrar tarefas ou revisar periodos abertos sem uso.";
+    default:
+      return "Investigar a jornada correspondente e definir uma acao corretiva.";
   }
 }

@@ -79,7 +79,8 @@ describe("admin dashboard data", () => {
     expect(result.errorMessage).toBe("Erro ao carregar painel administrativo: rpc indisponivel");
     expect(result.snapshot.totals.registered_users).toBe(0);
     expect(result.snapshot.activation_funnel.users_with_children).toBe(0);
-    expect(result.snapshot.recent_activity.task_logs_last_7_days).toBe(0);
+    expect(result.snapshot.recent_activity.task_logs.last_7_days).toBe(0);
+    expect(result.snapshot.recent_activity.task_logs.last_30_days).toBe(0);
     expect(result.snapshot.alerts).toEqual([]);
     expect(result.snapshot.recent_signups).toEqual([]);
   });
@@ -99,7 +100,10 @@ describe("admin dashboard data", () => {
           periods_with_task_logs: 2
         },
         recent_activity: {
-          active_users_last_7_days: 3
+          active_users: {
+            last_7_days: 3,
+            last_30_days: 9
+          }
         },
         alerts: [{ id: "children_without_tasks", count: 5 }]
       },
@@ -115,9 +119,42 @@ describe("admin dashboard data", () => {
     expect(result.snapshot.activation_funnel.registered_users).toBe(0);
     expect(result.snapshot.activation_funnel.users_with_children).toBe(4);
     expect(result.snapshot.activation_funnel.periods_with_task_logs).toBe(2);
-    expect(result.snapshot.recent_activity.task_logs_last_7_days).toBe(0);
-    expect(result.snapshot.recent_activity.active_users_last_7_days).toBe(3);
+    expect(result.snapshot.recent_activity.task_logs.last_7_days).toBe(0);
+    expect(result.snapshot.recent_activity.active_users.last_7_days).toBe(3);
+    expect(result.snapshot.recent_activity.active_users.last_30_days).toBe(9);
     expect(result.snapshot.alerts).toEqual([{ id: "children_without_tasks", count: 5 }]);
+  });
+
+  it("keeps compatibility with the previous flat recent activity shape", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { user_id: "user-123", role: "manager" },
+      error: null
+    });
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    const from = vi.fn(() => ({ select }));
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        recent_activity: {
+          task_logs_last_7_days: 2,
+          task_logs_last_30_days: 12,
+          closed_periods_last_7_days: 1,
+          closed_periods_last_30_days: 4
+        }
+      },
+      error: null
+    });
+
+    mockGetAuthUser.mockResolvedValue({ id: "user-123" });
+    mockCreateServerSupabaseClient.mockResolvedValue({ from, rpc });
+
+    const { getAdminDashboardSnapshot } = await import("@/features/admin/data/get-admin-dashboard");
+    const result = await getAdminDashboardSnapshot();
+
+    expect(result.snapshot.recent_activity.task_logs.last_7_days).toBe(2);
+    expect(result.snapshot.recent_activity.task_logs.last_30_days).toBe(12);
+    expect(result.snapshot.recent_activity.closed_periods.last_7_days).toBe(1);
+    expect(result.snapshot.recent_activity.closed_periods.last_30_days).toBe(4);
   });
 
   it("returns no admin users for non-owner memberships without calling the rpc", async () => {

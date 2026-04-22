@@ -53,10 +53,15 @@ export type AdminActivationFunnel = {
   periods_with_task_logs: number;
 };
 
+export type AdminActivityMetric = {
+  last_7_days: number;
+  last_30_days: number;
+};
+
 export type AdminRecentActivity = {
-  task_logs_last_7_days: number;
-  active_users_last_7_days: number;
-  closed_periods_last_7_days: number;
+  task_logs: AdminActivityMetric;
+  active_users: AdminActivityMetric;
+  closed_periods: AdminActivityMetric;
 };
 
 export type AdminAlertRecord = {
@@ -103,9 +108,18 @@ const EMPTY_SNAPSHOT: AdminDashboardSnapshot = {
     periods_with_task_logs: 0
   },
   recent_activity: {
-    task_logs_last_7_days: 0,
-    active_users_last_7_days: 0,
-    closed_periods_last_7_days: 0
+    task_logs: {
+      last_7_days: 0,
+      last_30_days: 0
+    },
+    active_users: {
+      last_7_days: 0,
+      last_30_days: 0
+    },
+    closed_periods: {
+      last_7_days: 0,
+      last_30_days: 0
+    }
   },
   alerts: [],
   recent_signups: [],
@@ -219,15 +233,46 @@ function normalizeSnapshot(value: unknown): AdminDashboardSnapshot {
       ...EMPTY_SNAPSHOT.activation_funnel,
       ...(isObjectRecord(raw.activation_funnel) ? raw.activation_funnel : {})
     },
-    recent_activity: {
-      ...EMPTY_SNAPSHOT.recent_activity,
-      ...(isObjectRecord(raw.recent_activity) ? raw.recent_activity : {})
-    },
+    recent_activity: normalizeRecentActivity(raw.recent_activity),
     alerts: Array.isArray(raw.alerts) ? (raw.alerts as AdminAlertRecord[]) : [],
     recent_signups: Array.isArray(raw.recent_signups) ? (raw.recent_signups as AdminRecentSignup[]) : [],
     recent_children: Array.isArray(raw.recent_children) ? (raw.recent_children as AdminRecentChild[]) : [],
     top_families: Array.isArray(raw.top_families) ? (raw.top_families as AdminTopFamily[]) : []
   };
+}
+
+function normalizeRecentActivity(value: unknown): AdminRecentActivity {
+  const fallback = EMPTY_SNAPSHOT.recent_activity;
+
+  if (!isObjectRecord(value)) {
+    return fallback;
+  }
+
+  return {
+    task_logs: normalizeActivityMetric(value.task_logs, {
+      last_7_days: toSafeNumber(value.task_logs_last_7_days),
+      last_30_days: toSafeNumber(value.task_logs_last_30_days)
+    }),
+    active_users: normalizeActivityMetric(value.active_users, {
+      last_7_days: toSafeNumber(value.active_users_last_7_days),
+      last_30_days: toSafeNumber(value.active_users_last_30_days)
+    }),
+    closed_periods: normalizeActivityMetric(value.closed_periods, {
+      last_7_days: toSafeNumber(value.closed_periods_last_7_days),
+      last_30_days: toSafeNumber(value.closed_periods_last_30_days)
+    })
+  };
+}
+
+function normalizeActivityMetric(value: unknown, fallback?: Partial<AdminActivityMetric>): AdminActivityMetric {
+  return {
+    last_7_days: isObjectRecord(value) ? toSafeNumber(value.last_7_days) : toSafeNumber(fallback?.last_7_days),
+    last_30_days: isObjectRecord(value) ? toSafeNumber(value.last_30_days) : toSafeNumber(fallback?.last_30_days)
+  };
+}
+
+function toSafeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
