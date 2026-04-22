@@ -24,10 +24,16 @@ type TaskLogEventRow = {
   task_type: Task["type"];
   action: TaskHistoryAction;
   created_at: string;
-  task?: {
-    title: string;
-    amount: number;
-  } | null;
+  task?:
+    | {
+        title: string;
+        amount: number;
+      }
+    | Array<{
+        title: string;
+        amount: number;
+      }>
+    | null;
 };
 
 async function getUserScopedClient() {
@@ -95,13 +101,15 @@ export async function createTaskLogEvent(
 }
 
 function mapTaskLogEventRow(row: TaskLogEventRow): TaskHistoryEntry {
+  const taskDetails = Array.isArray(row.task) ? row.task[0] : row.task;
+
   return {
     id: row.id,
     childId: row.child_id,
     periodId: row.period_id,
     taskId: row.task_id,
-    taskTitle: row.task?.title ?? "Tarefa",
-    taskAmount: row.task?.amount ?? 0,
+    taskTitle: taskDetails?.title ?? "Tarefa",
+    taskAmount: taskDetails?.amount ?? 0,
     taskType: row.task_type,
     action: row.action,
     createdAt: row.created_at

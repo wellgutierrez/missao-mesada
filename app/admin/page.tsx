@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AdminDashboardPage } from "@/features/admin/components/admin-dashboard-page";
 import { getAdminDashboardSnapshot, getAdminMembership, getAdminUsers } from "@/features/admin/data/get-admin-dashboard";
 import { getAuthUser } from "@/features/auth/data/get-auth-user";
@@ -10,6 +11,10 @@ export const metadata: Metadata = {
 
 export default async function AdminPage() {
   const [user, membership] = await Promise.all([getAuthUser(), getAdminMembership()]);
+
+  if (!user) {
+    redirect("/login");
+  }
 
   if (!membership) {
     return (
@@ -50,7 +55,7 @@ export default async function AdminPage() {
 
   const [{ snapshot, errorMessage }, adminUsersResult] = await Promise.all([
     getAdminDashboardSnapshot(),
-    membership.role === "owner" ? getAdminUsers() : Promise.resolve({ adminUsers: [] })
+    membership.role === "owner" ? getAdminUsers() : Promise.resolve({ adminUsers: [], errorMessage: undefined })
   ]);
 
   return (

@@ -3,10 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true });\"",
     "dev": "next dev",
     "build": "next build",
+    "build:clean": "npm run clean && npm run build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test e2e/auth-flows.spec.ts",
+    "test:e2e:live": "playwright test e2e/live-auth.spec.ts",
+    "validate": "npm run lint && npm test && npm run test:e2e",
+    "validate:live": "npm run validate && npm run test:e2e:live",
     "supabase:login": "npx supabase login",
     "supabase:link": "npx supabase link --project-ref",
     "supabase:db:push": "npx supabase db push",
@@ -22,6 +29,7 @@
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^16.2.3",
+    "@playwright/test": "^1.59.1",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
@@ -32,6 +40,7 @@
     "eslint-config-next": "^15.0.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
   }
 }

@@ -400,7 +400,16 @@ export function ChildDetailsPage({ child, tasks, childList, headerActions }: Chi
 
     try {
       const supabase = createBrowserSupabaseClient();
-      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setLoadError("Sua sessao expirou. Entre novamente para continuar.");
+        return;
+      }
+
+      const { error } = await supabase.from("tasks").delete().eq("id", taskId).eq("owner_user_id", user.id);
 
       if (error) {
         setLoadError("Nao foi possivel excluir a tarefa.");
@@ -468,13 +477,23 @@ export function ChildDetailsPage({ child, tasks, childList, headerActions }: Chi
 
     try {
       const supabase = createBrowserSupabaseClient();
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setLoadError("Sua sessao expirou. Entre novamente para continuar.");
+        return;
+      }
+
       const { error } = await supabase
         .from("allowance_periods")
         .update({
           reward_title: rewardForm.reward_title,
           bonus_goal: rewardForm.bonus_goal
         })
-        .eq("id", activePeriod.id);
+        .eq("id", activePeriod.id)
+        .eq("owner_user_id", user.id);
 
       if (error) {
         setLoadError("Nao foi possivel salvar a recompensa.");

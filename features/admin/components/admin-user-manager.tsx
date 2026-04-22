@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { upsertAdminUserAction } from "@/features/admin/actions/upsert-admin-user";
 import type { AdminRole, AdminUserRecord } from "@/features/admin/data/get-admin-dashboard";
 
@@ -12,6 +13,7 @@ type AdminUserManagerProps = {
 const ROLE_OPTIONS: AdminRole[] = ["owner", "manager", "viewer"];
 
 export function AdminUserManager({ adminUsers, errorMessage }: AdminUserManagerProps) {
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -35,6 +37,7 @@ export function AdminUserManager({ adminUsers, errorMessage }: AdminUserManagerP
 
       setFeedback({ success: "Administrador salvo com sucesso." });
       setFormData({ email: "", role: "manager", note: "" });
+      router.refresh();
     } finally {
       setIsSubmitting(false);
     }

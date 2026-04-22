@@ -1,8 +1,13 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const getAuthUser = cache(async () => {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },

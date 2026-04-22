@@ -81,10 +81,18 @@ export function AuthForm({ mode }: AuthFormProps) {
       return;
     }
 
-    const supabase = createBrowserSupabaseClient();
     setIsSubmitting(true);
 
     try {
+      let supabase;
+
+      try {
+        supabase = createBrowserSupabaseClient();
+      } catch {
+        setErrorMessage("Configure o Supabase antes de usar login e cadastro.");
+        return;
+      }
+
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
@@ -265,10 +273,13 @@ function AuthField({
   action
 }: AuthFieldProps) {
   return (
-    <label className="block space-y-3">
-      <span className="text-base font-semibold text-slate-700">{label}</span>
+    <div className="space-y-3">
+      <label htmlFor={name} className="block text-base font-semibold text-slate-700">
+        {label}
+      </label>
       <span className="flex overflow-hidden rounded-2xl border border-app-line bg-white shadow-[0_12px_26px_-26px_rgba(15,23,42,0.6)] transition focus-within:border-app-primary focus-within:ring-2 focus-within:ring-app-primary/15">
         <input
+          id={name}
           type={type}
           name={name}
           autoComplete={autoComplete}
@@ -280,7 +291,7 @@ function AuthField({
         />
         {action ? <span className="flex items-center px-3">{action}</span> : null}
       </span>
-    </label>
+    </div>
   );
 }
 

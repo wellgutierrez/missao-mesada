@@ -36,4 +36,5 @@ comment on column public.task_log_events.action is
   'Acao realizada pelo usuario: add para marcar, remove para desmarcar.';
 
 -- A ativacao de owner_user_id, RLS e policies desta tabela acontece em sql/add-owner-user-id.sql.
-alter table public.task_log_events disable row level security;
+-- Nao force RLS para disabled aqui: este script auxiliar pode ser executado depois da configuracao
+-- principal e acabar enfraquecendo a seguranca da tabela por engano.

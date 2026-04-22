@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
+import { sanitizeNextPath } from "./sanitize-next-path";
 
 type CookieWrite = {
   name: string;
@@ -12,7 +13,7 @@ type CookieWrite = {
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") ?? "/";
+  const next = sanitizeNextPath(requestUrl.searchParams.get("next"));
   const response = NextResponse.redirect(new URL(next, requestUrl.origin));
 
   if (!code || !supabaseUrl || !supabaseAnonKey) {

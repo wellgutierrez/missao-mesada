@@ -29,13 +29,28 @@ export function calculateEndDate(startDate: string, periodType: PeriodType) {
       date.setDate(date.getDate() + 15);
       break;
     case "monthly":
-      date.setDate(date.getDate() + 30);
+      return addCalendarMonth(startDate);
       break;
     default:
       date.setDate(date.getDate() + 7);
   }
 
   return date.toISOString().split("T")[0];
+}
+
+function addCalendarMonth(startDate: string) {
+  const [yearValue, monthValue, dayValue] = startDate.split("-").map(Number);
+
+  if (!yearValue || !monthValue || !dayValue) {
+    return startDate;
+  }
+
+  const targetMonthIndex = monthValue;
+  const lastDayOfTargetMonth = new Date(Date.UTC(yearValue, targetMonthIndex + 1, 0)).getUTCDate();
+  const normalizedDay = Math.min(dayValue, lastDayOfTargetMonth);
+  const result = new Date(Date.UTC(yearValue, targetMonthIndex, normalizedDay));
+
+  return result.toISOString().split("T")[0];
 }
 
 export async function getOpenPeriodByChild(childId: string): Promise<AllowancePeriod | null> {
